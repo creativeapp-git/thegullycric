@@ -26,7 +26,24 @@ const LoginScreen = () => {
       navigation.replace('Tabs');
     } catch (error: any) {
       console.log('Login error:', error);
-      Alert.alert('Error', error.message);
+      let errorMessage = 'Login failed. Please try again.';
+
+      // Handle specific Firebase auth errors
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email address.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = 'This account has been disabled.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed login attempts. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -69,6 +86,11 @@ const LoginScreen = () => {
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.phoneButton} onPress={() => navigation.navigate('PhoneLogin')} disabled={loading}>
+        <Text style={styles.phoneButtonText}>Login with Phone Number</Text>
+      </TouchableOpacity>
+
       <View style={styles.divider}>
         <View style={styles.line} />
         <Text style={styles.dividerText}>OR</Text>
@@ -115,6 +137,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  phoneButton: {
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  phoneButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

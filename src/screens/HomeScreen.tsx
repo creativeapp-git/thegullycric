@@ -4,6 +4,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getLiveMatches, searchMatches, Match } from '../services/matchService';
 import Header from '../components/Header';
+import { SkeletonMatchList } from '../components/SkeletonLoader';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -103,10 +104,7 @@ const HomeScreen = () => {
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={styles.loadingText}>Loading matches...</Text>
-        </View>
+        <SkeletonMatchList count={5} />
       ) : filteredMatches.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="calendar-outline" size={48} color="#ccc" />

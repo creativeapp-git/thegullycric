@@ -9,6 +9,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import CreateMatchScreen from '../screens/CreateMatchScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
+import PhoneLoginScreen from '../screens/PhoneLoginScreen';
 import MatchDetailScreen from '../screens/MatchDetailScreen';
 
 const Tab = createBottomTabNavigator();
@@ -55,6 +56,7 @@ const AppNavigator = ({ initialRouteName }: { initialRouteName?: string }) => {
     <Stack.Navigator initialRouteName={initialRouteName} screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
       <Stack.Screen name="Tabs" component={TabNavigator} />
       <Stack.Screen name="CreateMatch" component={CreateMatchScreen} />
       <Stack.Screen name="MatchDetail" component={MatchDetailScreen} />

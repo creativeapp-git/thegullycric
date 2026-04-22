@@ -4,6 +4,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getFixtures, searchMatches, Match } from '../services/matchService';
 import Header from '../components/Header';
+import { SkeletonMatchList } from '../components/SkeletonLoader';
 
 const FixturesScreen = () => {
   const navigation = useNavigation();
@@ -101,10 +102,7 @@ const FixturesScreen = () => {
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF9800" />
-          <Text style={styles.loadingText}>Loading fixtures...</Text>
-        </View>
+        <SkeletonMatchList count={4} />
       ) : filteredFixtures.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="calendar-outline" size={48} color="#ccc" />

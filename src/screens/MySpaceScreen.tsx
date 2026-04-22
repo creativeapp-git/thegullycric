@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../services/firebase';
 import { getUserMatches, Match } from '../services/matchService';
 import Header from '../components/Header';
+import { SkeletonMatchList } from '../components/SkeletonLoader';
 
 const MySpaceScreen = () => {
   const navigation = useNavigation();
@@ -86,10 +87,7 @@ const MySpaceScreen = () => {
       </TouchableOpacity>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Loading your matches...</Text>
-        </View>
+        <SkeletonMatchList count={3} />
       ) : userMatches.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="create-outline" size={48} color="#ccc" />

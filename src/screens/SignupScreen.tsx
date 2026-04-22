@@ -117,6 +117,10 @@ const SignupScreen = () => {
       <TouchableOpacity onPress={() => navigation.navigate('Login')}>
         <Text style={styles.link}>Already have an account? Login</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('PhoneLogin')}>
+        <Text style={styles.phoneLink}>Sign up with Phone Number</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -191,6 +195,12 @@ const styles = StyleSheet.create({
   link: {
     color: '#2196F3',
     textAlign: 'center',
+  },
+  phoneLink: {
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 14,
   },
 });
 
