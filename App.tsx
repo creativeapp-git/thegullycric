@@ -1,30 +1,74 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import AppNavigator from './src/navigation/AppNavigator';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { DeviceEventEmitter, Platform } from 'react-native';
 import { auth } from './src/services/firebase';
+import { getUserProfile } from './src/services/userService';
+import AppNavigator from './src/navigation/AppNavigator';
+
+if (Platform.OS === 'web') {
+  const style = document.createElement('style');
+  style.textContent = `
+    html, body, #root {
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user ? 'logged in' : 'logged out', user?.email);
-      setUser(user);
+    const checkProfile = async (uid: string) => {
+      try {
+        const profile = await getUserProfile(uid);
+        setHasProfile(!!(profile && profile.username));
+      } catch (e) {
+        setHasProfile(false);
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log('Auth state changed:', firebaseUser ? 'logged in' : 'logged out', firebaseUser?.uid);
+      setUser(firebaseUser);
+
+      if (firebaseUser) {
+        await checkProfile(firebaseUser.uid);
+      } else {
+        setHasProfile(false);
+      }
+
       setLoading(false);
     });
-    return unsubscribe;
+
+    const profileSub = DeviceEventEmitter.addListener('profileUpdated', () => {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        checkProfile(currentUser.uid);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      profileSub.remove();
+    };
   }, []);
 
   if (loading) {
-    return null; // Or a loading screen
+    return null; // A proper splash screen could go here
   }
 
   return (
     <NavigationContainer>
-      <AppNavigator initialRouteName={user ? 'Tabs' : 'Login'} />
+      <AppNavigator user={user} hasProfile={hasProfile} />
       <StatusBar style="auto" />
     </NavigationContainer>
   );

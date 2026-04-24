@@ -1,28 +1,40 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
+import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { auth } from '../services/firebase';
+import { getUserProfile } from '../services/userService';
 
-interface HeaderProps {
-  showGreeting?: boolean;
-}
+const Header: React.FC = () => {
+  const [username, setUsername] = useState('Player');
+  const navigation = useNavigation<any>();
 
-const Header: React.FC<HeaderProps> = ({ showGreeting = true }) => {
-  const user = auth.currentUser;
-  const userName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (auth.currentUser) {
+        const profile = await getUserProfile(auth.currentUser.uid);
+        if (profile && profile.username) {
+          setUsername(profile.username);
+        }
+      }
+    };
+    fetchUser();
+  }, []);
 
   return (
     <View style={styles.header}>
-      <View style={styles.logoContainer}>
-        <Ionicons name="football" size={32} color="#4CAF50" />
-        <Text style={styles.logoText}>GullyCric</Text>
+      <Image
+        source={require('../../assets/app-logo.png')}
+        style={styles.logo}
+        resizeMode="cover"
+      />
+      <View style={styles.greetingContainer}>
+        <Text style={styles.greetingText}>Hey there, {username} <Text style={{fontSize: 18}}>👋</Text></Text>
       </View>
-      {showGreeting && (
-        <View style={styles.greetingContainer}>
-          <Text style={styles.greeting}>Hello there, {userName}!</Text>
-          <Ionicons name="hand-left" size={20} color="#4CAF50" style={styles.waveIcon} />
+      <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+        <View style={styles.avatarCircle}>
+          <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
         </View>
-      )}
+      </TouchableOpacity>
     </View>
   );
 };
@@ -30,38 +42,42 @@ const Header: React.FC<HeaderProps> = ({ showGreeting = true }) => {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F3F4F6',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginLeft: 8,
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12, // Rounded corners square
+    backgroundColor: '#F3F4F6',
   },
   greetingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-    justifyContent: 'flex-end',
+    marginLeft: 12,
   },
-  greeting: {
-    fontSize: 14,
-    color: '#333',
-    marginRight: 4,
+  greetingText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
   },
-  waveIcon: {
-    transform: [{ rotate: '-20deg' }],
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  avatarText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  }
 });
 
 export default Header;

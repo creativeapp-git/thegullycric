@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { getFixtures, searchMatches, Match } from '../services/matchService';
+import { getFixtures, searchMatches } from '../services/matchService';
+import { Match } from '../types';
 import Header from '../components/Header';
+import MatchCard from '../components/MatchCard';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
+import { AppNavigationProp } from '../navigation/navigation.types';
 
 const FixturesScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<AppNavigationProp>();
   const [fixtures, setFixtures] = useState<Match[]>([]);
   const [filteredFixtures, setFilteredFixtures] = useState<Match[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,8 +27,9 @@ const FixturesScreen = () => {
     try {
       setLoading(true);
       const scheduledMatches = await getFixtures();
-      setFixtures(scheduledMatches);
-      setFilteredFixtures(scheduledMatches);
+      const activeFixtures = scheduledMatches.filter(m => !m.isDeleted);
+      setFixtures(activeFixtures);
+      setFilteredFixtures(activeFixtures);
     } catch (error) {
       console.error('Error fetching fixtures:', error);
     } finally {
@@ -50,74 +54,52 @@ const FixturesScreen = () => {
   };
 
   const renderFixture = ({ item }: { item: Match }) => (
-    <TouchableOpacity
-      style={styles.fixtureCard}
-      onPress={() => navigation.navigate('MatchDetail' as never, { matchId: item.id } as never)}
-    >
-      <View style={styles.fixtureHeader}>
-        <View>
-          <Text style={styles.fixtureId}>ID: {item.matchId}</Text>
-          <Text style={styles.fixtureName}>{item.name}</Text>
-          <Text style={styles.fixtureLocation}>{item.location}</Text>
-        </View>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
-
-      <View style={styles.teamsRow}>
-        <View style={styles.teamScore}>
-          <Text style={styles.teamName}>{item.team1}</Text>
-        </View>
-        <Text style={styles.vs}>vs</Text>
-        <View style={styles.teamScore}>
-          <Text style={styles.teamName}>{item.team2}</Text>
-        </View>
-      </View>
-
-      <View style={styles.fixtureFooter}>
-        <Text style={styles.fixtureDate}>{item.date} • {item.time}</Text>
-        <Ionicons name="chevron-forward" size={20} color="#FF9800" />
-      </View>
-    </TouchableOpacity>
+    <MatchCard
+      match={item}
+      onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })}
+    />
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
       <Header />
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#999" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by ID, name, or location..."
-          value={searchQuery}
-          onChangeText={handleSearch}
-          placeholderTextColor="#999"
-        />
-        {searchQuery !== '' && (
-          <TouchableOpacity onPress={() => handleSearch('')}>
-            <Ionicons name="close" size={20} color="#999" />
-          </TouchableOpacity>
-        )}
+      
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#9CA3AF" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search fixtures..."
+            value={searchQuery}
+            onChangeText={handleSearch}
+            placeholderTextColor="#9CA3AF"
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => handleSearch('')}>
+              <Ionicons name="close-circle" size={20} color="#D1D5DB" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {loading ? (
-        <SkeletonMatchList count={4} />
+        <View style={{ paddingHorizontal: 20 }}><SkeletonMatchList count={4} /></View>
       ) : filteredFixtures.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={48} color="#ccc" />
-          <Text style={styles.emptyText}>
-            {fixtures.length === 0 ? 'No scheduled matches' : 'No fixtures found'}
-          </Text>
-          <Text style={styles.emptySubtext}>Check back for upcoming matches</Text>
+          <View style={styles.emptyIconCircle}>
+            <Text style={{fontSize: 40}}>📅</Text>
+          </View>
+          <Text style={styles.emptyText}>No upcoming matches</Text>
+          <Text style={styles.emptySubtext}>Check back later for new fixtures</Text>
         </View>
       ) : (
         <FlatList
           data={filteredFixtures}
           renderItem={renderFixture}
           keyExtractor={(item) => item.id || item.matchId}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
           contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -125,126 +107,17 @@ const FixturesScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    margin: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    color: '#333',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  listContainer: {
-    padding: 12,
-  },
-  fixtureCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    elevation: 2,
-  },
-  fixtureHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  fixtureId: {
-    fontSize: 11,
-    color: '#999',
-    marginBottom: 4,
-  },
-  fixtureName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  fixtureLocation: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF9800',
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  teamsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  teamScore: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamName: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  vs: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    color: '#999',
-  },
-  fixtureFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  fixtureDate: {
-    fontSize: 12,
-    color: '#999',
-  },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  searchContainer: { paddingHorizontal: 20, paddingBottom: 16, paddingTop: 16 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, height: 50 },
+  searchInput: { flex: 1, fontSize: 16, color: '#111827', marginLeft: 12 },
+  
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60, paddingHorizontal: 32 },
+  emptyIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  emptyText: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  emptySubtext: { fontSize: 15, color: '#6B7280', textAlign: 'center' },
+
+  listContainer: { padding: 20, paddingBottom: 100 },
 });
 
 export default FixturesScreen;

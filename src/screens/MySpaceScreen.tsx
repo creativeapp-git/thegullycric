@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Alert } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../services/firebase';
-import { getUserMatches, Match } from '../services/matchService';
+import { getUserMatches, deleteMatch } from '../services/matchService';
+import { Match } from '../types';
 import Header from '../components/Header';
+import MatchCard from '../components/MatchCard';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
+import { AppNavigationProp } from '../navigation/navigation.types';
 
 const MySpaceScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<AppNavigationProp>();
   const [userMatches, setUserMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,7 +29,7 @@ const MySpaceScreen = () => {
       setLoading(true);
       if (auth.currentUser) {
         const matches = await getUserMatches(auth.currentUser.uid);
-        setUserMatches(matches);
+        setUserMatches(matches.filter(m => !m.isDeleted));
       }
     } catch (error) {
       console.error('Error fetching user matches:', error);
@@ -42,65 +45,74 @@ const MySpaceScreen = () => {
   };
 
   const createMatch = () => {
-    navigation.navigate('CreateMatch' as never);
+    navigation.navigate('CreateMatch');
   };
 
-  const renderMatch = ({ item }: { item: Match }) => (
-    <TouchableOpacity
-      style={styles.matchCard}
-      onPress={() => navigation.navigate('MatchDetail' as never, { matchId: item.id } as never)}
-    >
-      <View style={styles.matchHeader}>
-        <View>
-          <Text style={styles.matchId}>ID: {item.matchId}</Text>
-          <Text style={styles.matchName}>{item.name}</Text>
-          <Text style={styles.matchLocation}>{item.location}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'Live' ? '#FF5722' : item.status === 'Completed' ? '#4CAF50' : '#2196F3' }]}>
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
+  const handleDelete = (matchId: string) => {
+    const confirmDelete = () => {
+      deleteMatch(matchId).then(() => {
+        fetchUserMatches();
+      }).catch(e => {
+        if (Platform.OS === 'web') window.alert('Failed to delete');
+      });
+    };
 
-      <View style={styles.teamsRow}>
-        <View style={styles.teamScore}>
-          <Text style={styles.teamName}>{item.team1}</Text>
-        </View>
-        <Text style={styles.vs}>vs</Text>
-        <View style={styles.teamScore}>
-          <Text style={styles.teamName}>{item.team2}</Text>
-        </View>
-      </View>
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this match? It will be removed from your space.')) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert('Delete Match', 'Are you sure you want to delete this match?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: confirmDelete }
+      ]);
+    }
+  };
 
-      <View style={styles.matchFooter}>
-        <Text style={styles.matchType}>{item.type} • {item.overs} Overs</Text>
-        <Ionicons name="chevron-forward" size={20} color="#2196F3" />
-      </View>
-    </TouchableOpacity>
+  const renderMatchWithDelete = ({ item }: { item: Match }) => (
+    <View style={{ marginBottom: 8 }}>
+      <MatchCard
+        match={item}
+        onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })}
+      />
+      <TouchableOpacity 
+        style={styles.deleteBtn}
+        onPress={() => handleDelete(item.id || item.matchId)}
+      >
+        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
       <Header />
-      <TouchableOpacity style={styles.createButton} onPress={createMatch}>
-        <Ionicons name="add" size={20} color="#fff" />
-        <Text style={styles.createButtonText}>Create Match</Text>
-      </TouchableOpacity>
+      
+      <View style={styles.actionContainer}>
+        <TouchableOpacity style={styles.createButton} onPress={createMatch}>
+          <Ionicons name="add-circle" size={24} color="#FFFFFF" />
+          <Text style={styles.createButtonText}>Create New Match</Text>
+        </TouchableOpacity>
+      </View>
 
-      {loading ? (
-        <SkeletonMatchList count={3} />
+      {loading && !refreshing ? (
+        <View style={{ paddingHorizontal: 20 }}><SkeletonMatchList count={3} /></View>
       ) : userMatches.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="create-outline" size={48} color="#ccc" />
+          <View style={styles.emptyIconCircle}>
+            <Text style={{fontSize: 40}}>🏟️</Text>
+          </View>
           <Text style={styles.emptyText}>No matches created yet</Text>
-          <Text style={styles.emptySubtext}>Create your first match to get started</Text>
+          <Text style={styles.emptySubtext}>Host your first match and it will appear here</Text>
         </View>
       ) : (
         <FlatList
           data={userMatches}
-          renderItem={renderMatch}
+          renderItem={renderMatchWithDelete}
           keyExtractor={(item) => item.id || item.matchId}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
           contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -108,123 +120,16 @@ const MySpaceScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  createButton: {
-    flexDirection: 'row',
-    backgroundColor: '#2196F3',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 12,
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  listContainer: {
-    padding: 12,
-  },
-  matchCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    elevation: 2,
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  matchId: {
-    fontSize: 11,
-    color: '#999',
-    marginBottom: 4,
-  },
-  matchName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  matchLocation: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  teamsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  teamScore: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamName: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  vs: {
-    marginHorizontal: 8,
-    fontSize: 12,
-    color: '#999',
-  },
-  matchFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  matchType: {
-    fontSize: 12,
-    color: '#999',
-  },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  actionContainer: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  createButton: { backgroundColor: '#111827', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  createButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginLeft: 8 },
+  listContainer: { padding: 20, paddingBottom: 100 },
+  deleteBtn: { position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 60, paddingHorizontal: 32 },
+  emptyIconCircle: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  emptyText: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  emptySubtext: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22 },
 });
 
 export default MySpaceScreen;

@@ -1,14 +1,61 @@
-import { signInWithPopup, GoogleAuthProvider, signOut, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
-import { auth } from './firebase';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendEmailVerification,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
-const googleProvider = new GoogleAuthProvider();
-
-export const signInWithGoogle = async () => {
+// Sign in with username or email
+export const signInWithUsernameOrEmail = async (identifier: string, password: string) => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    let email = identifier.trim();
+    
+    // If it doesn't look like an email, try to find it as a username
+    if (!email.includes('@')) {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        // Use the email from the first matching user document
+        email = querySnapshot.docs[0].data().email;
+      } else {
+        // If no username found, fallback to the old behavior just in case
+        // but better to throw an error that's clearer
+        throw { code: 'auth/user-not-found', message: 'Username not found' };
+      }
+    }
+    
+    const result = await signInWithEmailAndPassword(auth, email, password);
     return result.user;
   } catch (error: any) {
-    throw new Error(error.message);
+    throw error;
+  }
+};
+
+// Sign up with Email and Password
+export const signUpWithEmail = async (email: string, password: string) => {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    await sendEmailVerification(result.user);
+    return result.user;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+// Resend verification email
+export const resendVerificationEmail = async () => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('No user logged in');
+    await sendEmailVerification(currentUser);
+  } catch (error: any) {
+    throw error;
   }
 };
 
@@ -20,42 +67,13 @@ export const signOutUser = async () => {
   }
 };
 
-// Phone authentication
-export const setupRecaptcha = (containerId: string) => {
-  if (!window.recaptchaVerifier) {
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-      size: 'invisible',
-      callback: (response: any) => {
-        console.log('Recaptcha verified');
-      },
-      'expired-callback': () => {
-        console.log('Recaptcha expired');
-      },
-    });
-  }
-};
-
-export const signInWithPhone = async (phoneNumber: string): Promise<ConfirmationResult> => {
+// Sign in with Google (Web Only)
+export const signInWithGoogleWeb = async () => {
   try {
-    const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
-    return confirmationResult;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-};
-
-export const verifyOTP = async (confirmationResult: ConfirmationResult, otp: string) => {
-  try {
-    const result = await confirmationResult.confirm(otp);
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
     return result.user;
   } catch (error: any) {
-    throw new Error(error.message);
+    throw error;
   }
 };
-
-// Extend window interface for recaptcha
-declare global {
-  interface Window {
-    recaptchaVerifier: RecaptchaVerifier;
-  }
-}
