@@ -22,7 +22,7 @@ if (Platform.OS === 'web') {
       flex-direction: column;
       height: 100vh;
       width: 100%;
-      overflow-y: auto;
+      overflow: hidden;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
     }

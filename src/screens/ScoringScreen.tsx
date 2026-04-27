@@ -54,6 +54,7 @@ export default function ScoringScreen() {
   const [showSelectModal, setShowSelectModal] = useState<'striker' | 'nonStriker' | 'bowler' | 'fielder' | null>(null);
   const [showControlsModal, setShowControlsModal] = useState(false);
   const [selectModalContext, setSelectModalContext] = useState<string>('');
+  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => { 
     if (matchId) {
@@ -153,18 +154,21 @@ export default function ScoringScreen() {
   }
 
   const recordBall = async (p: { runs: number, isWd?: boolean, isNb?: boolean, isBye?: boolean, isLb?: boolean, isW?: boolean, wType?: string, fld?: string, dism?: string }) => {
-    if (inningsBreak || matchOver) return;
-    // Block scoring if overs limit reached
-    if (completedOvers >= maxOvers && remainingBalls === 0) {
-      checkInningsEnd(ballLog);
-      return;
-    }
-    if (!striker || !nonStriker || !bowler) return showAlert('Missing Players', 'Select striker, non-striker and bowler.');
-    if (striker === nonStriker) return showAlert('Error', 'Striker and non-striker cannot be same player.');
-    if (outPlayers.includes(striker)) { setStriker(''); setShowSelectModal('striker'); return; }
-    if (outPlayers.includes(nonStriker)) { setNonStriker(''); setShowSelectModal('nonStriker'); return; }
+    if (inningsBreak || matchOver || isRecording) return;
+    setIsRecording(true);
     
-    let extras = 0;
+    try {
+      // Block scoring if overs limit reached
+      if (completedOvers >= maxOvers && remainingBalls === 0) {
+        checkInningsEnd(ballLog);
+        return;
+      }
+      if (!striker || !nonStriker || !bowler) { showAlert('Missing Players', 'Select striker, non-striker and bowler.'); return; }
+      if (striker === nonStriker) { showAlert('Error', 'Striker and non-striker cannot be same player.'); return; }
+      if (outPlayers.includes(striker)) { setStriker(''); setShowSelectModal('striker'); return; }
+      if (outPlayers.includes(nonStriker)) { setNonStriker(''); setShowSelectModal('nonStriker'); return; }
+      
+      let extras = 0;
     if (p.isWd && match?.rules?.wideExtraRun) extras = 1;
     if (p.isNb && match?.rules?.noBallExtraRun) extras = 1;
 
@@ -245,6 +249,9 @@ export default function ScoringScreen() {
     }
     
     checkInningsEnd(newLog);
+    } finally {
+      setIsRecording(false);
+    }
   };
 
   const checkInningsEnd = async (log: BallEvent[]) => {
@@ -499,7 +506,7 @@ export default function ScoringScreen() {
       </Modal>
 
       {/* Wicket Modal */}
-      <Modal visible={showWicketModal} transparent animationType="slide">
+      <Modal visible={showWicketModal && !showSelectModal} transparent animationType="slide">
         <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', alignItems:'center'}}>
           <View style={{backgroundColor:'#FFF', borderRadius:24, width:'90%', maxHeight:'80%', display:'flex', flexDirection:'column'}}>
             <ScrollView showsVerticalScrollIndicator={true} style={{flex:1}} bounces={false} contentContainerStyle={{padding:24}}>
