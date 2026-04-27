@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, Switch, TouchableOpacity,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Animated,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,8 +11,7 @@ import { Match } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
 
 const STOCK_LOGOS = [
-  '#EF4444', '#F97316', '#F59E0B', '#10B981', '#06B6D4',
-  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#1F2937'
+  '🏏', '⚾', '🎯', '🏆', '🦁', '🐯', '🦅', '🐘', '🔥', '⚡', '🌟', '💎', '🎪', '🛡️', '👑', '🎭'
 ];
 
 const CreateMatchScreen = () => {
@@ -154,10 +153,21 @@ const CreateMatchScreen = () => {
     else setTeam2Players(team2Players.filter((_, i) => i !== index));
   };
 
+  const coinAnim = React.useRef(new Animated.Value(0)).current;
+
   const handleVirtualToss = () => {
     setIsFlipping(true);
+    setTossWinner('');
+    
+    coinAnim.setValue(0);
+    Animated.timing(coinAnim, {
+      toValue: 1,
+      duration: 1500,
+      useNativeDriver: true,
+    }).start();
+
     setTimeout(() => {
-      const winner = Math.random() > 0.5 ? team1 : team2;
+      const winner = Math.random() > 0.5 ? (team1 || 'Team 1') : (team2 || 'Team 2');
       setTossWinner(winner);
       setIsFlipping(false);
     }, 1500);
@@ -176,9 +186,7 @@ const CreateMatchScreen = () => {
           name: matchName, type: matchType, overs: parseInt(overs) || 20, location,
           date: matchDate, time: matchTime, team1, team2, team1Logo, team2Logo,
           team1Players, team2Players, rules: { wideExtraRun, noBallExtraRun, ballByBall },
-          status: status === 'Live' ? 'Live' : undefined, // only upgrade to Live, don't downgrade
-          tossWinner: status === 'Live' ? tossWinner : undefined,
-          tossDecision: status === 'Live' ? tossDecision : undefined,
+          ...(status === 'Live' ? { status: 'Live' as const, tossWinner, tossDecision } : {}),
         });
         return { id: existingMatchId };
       } else {
@@ -229,14 +237,24 @@ const CreateMatchScreen = () => {
   };
 
   const handleStartLive = async () => {
-    if (!tossWinner) {
+    if (!tossWinner || !tossDecision) {
       showAlert('Error', 'Please complete the toss before starting.');
       return;
     }
-    const created = await saveMatch('Live');
-    if (created) {
-      // Immediately start scoring
-      navigation.replace('Scoring', { matchId: created.id });
+    try {
+      setLoading(true);
+      const created = await saveMatch('Live');
+      if (created && created.id) {
+        console.log('Match created, navigating to scoring:', created.id);
+        navigation.replace('Scoring', { matchId: created.id });
+      } else {
+        showAlert('Error', 'Failed to initialize live match. Please check your internet and try again.');
+      }
+    } catch (err) {
+      console.error('Error starting live match:', err);
+      showAlert('Error', 'An unexpected error occurred while starting the match.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -262,22 +280,35 @@ const CreateMatchScreen = () => {
     </View>
   );
 
-  const renderLogoPicker = (teamNum: 1 | 2, currentLogo: string) => (
+  const renderLogoPicker = (teamNum: 1 | 2, currentLogo: string) => {
+    const otherLogo = teamNum === 1 ? team2Logo : team1Logo;
+    return (
     <View style={s.logoPickerContainer}>
       <Text style={s.logoPickerTitle}>Select Logo</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        {STOCK_LOGOS.map((color) => (
+        {STOCK_LOGOS.map((emoji) => {
+          const isOtherTeam = emoji === otherLogo;
+          return (
           <TouchableOpacity
-            key={color}
-            style={[s.stockLogo, { backgroundColor: color }, currentLogo === color && s.stockLogoSelected]}
-            onPress={() => teamNum === 1 ? setTeam1Logo(color) : setTeam2Logo(color)}
+            key={emoji}
+            style={[s.stockLogo, { backgroundColor: currentLogo === emoji ? '#10B981' : '#F3F4F6', opacity: isOtherTeam ? 0.3 : 1 }, currentLogo === emoji && s.stockLogoSelected]}
+            onPress={() => {
+              if (isOtherTeam) {
+                showAlert('Same Logo', 'Both teams cannot have the same logo. Pick a different one!');
+                return;
+              }
+              teamNum === 1 ? setTeam1Logo(emoji) : setTeam2Logo(emoji);
+            }}
           >
-            <Ionicons name="shield" size={16} color="#FFF" />
+            <Text style={{fontSize: 20}}>{emoji}</Text>
+            {isOtherTeam && <View style={{position:'absolute', top:0, left:0, right:0, bottom:0, justifyContent:'center', alignItems:'center'}}><Ionicons name="close" size={24} color="#EF4444" /></View>}
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
-  );
+    );
+  };
 
   const renderPhase1 = () => (
     <View>
@@ -462,18 +493,28 @@ const CreateMatchScreen = () => {
         {tossType === 'virtual' ? (
           <View style={s.virtualContainer}>
             {isFlipping ? (
-              <View style={s.coinFlipping}><ActivityIndicator color="#F59E0B" size="large" /></View>
+              <Animated.View style={[
+                s.coinFlipping,
+                {
+                  transform: [
+                    { rotateY: coinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '1800deg'] }) },
+                    { scale: coinAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.5, 1] }) }
+                  ]
+                }
+              ]}>
+                <MaterialCommunityIcons name={"coin" as any} size={60} color="#F59E0B" />
+              </Animated.View>
             ) : tossWinner ? (
               <View style={s.tossResultBox}>
                 <Ionicons name="checkmark-circle" size={48} color="#10B981" />
                 <Text style={s.tossWinnerText}>{tossWinner} won the toss!</Text>
                 <TouchableOpacity onPress={() => setTossWinner('')} style={{ marginTop: 12 }}>
-                  <Text style={{ color: '#6B7280' }}>Flip Again</Text>
+                  <Text style={{ color: '#6B7280', fontWeight: '600' }}>Flip Again</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity style={s.coinButton} onPress={handleVirtualToss}>
-                <MaterialCommunityIcons name="coin" size={48} color="#F59E0B" />
+                <MaterialCommunityIcons name={"coin" as any} size={48} color="#F59E0B" />
                 <Text style={s.coinText}>Tap to Flip Coin</Text>
               </TouchableOpacity>
             )}

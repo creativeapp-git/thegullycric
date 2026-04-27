@@ -9,21 +9,64 @@ interface MatchCardProps {
 }
 
 const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
+  // Compute scores from ballLog if score1/score2 string fields are not populated
+  let displayScore1 = match.score1;
+  let displayScore2 = match.score2;
+
+  if (!displayScore1 && match.ballLog && match.ballLog.length > 0) {
+    const inn1Balls = match.ballLog.filter(b => b.innings === 1 && !b.id?.startsWith('edited_'));
+    if (inn1Balls.length > 0) {
+      const runs1 = inn1Balls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
+      const wickets1 = inn1Balls.filter(b => b.isWicket).length;
+      const legal1 = inn1Balls.filter(b => !b.isWide && !b.isNoBall).length;
+      displayScore1 = `${runs1}/${wickets1} (${Math.floor(legal1 / 6)}.${legal1 % 6})`;
+    }
+  }
+  if (!displayScore2 && match.ballLog && match.ballLog.length > 0) {
+    const inn2Balls = match.ballLog.filter(b => b.innings === 2 && !b.id?.startsWith('edited_'));
+    if (inn2Balls.length > 0) {
+      const runs2 = inn2Balls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
+      const wickets2 = inn2Balls.filter(b => b.isWicket).length;
+      const legal2 = inn2Balls.filter(b => !b.isWide && !b.isNoBall).length;
+      displayScore2 = `${runs2}/${wickets2} (${Math.floor(legal2 / 6)}.${legal2 % 6})`;
+    }
+  }
+
   // Try to determine the winner if completed
   let resultText = '';
-  if (match.status === 'Completed' && match.score1 && match.score2) {
-    const s1 = parseInt(match.score1.split('/')[0]);
-    const s2 = parseInt(match.score2.split('/')[0]);
-    if (s1 > s2) resultText = `${match.team1} Won`;
-    else if (s2 > s1) resultText = `${match.team2} Won`;
-    else resultText = 'Match Tied';
+  if (match.status === 'Completed') {
+    const s1Str = displayScore1 || match.score1;
+    const s2Str = displayScore2 || match.score2;
+    if (s1Str && s2Str) {
+      const s1 = parseInt(s1Str.split('/')[0]) || 0;
+      const s2 = parseInt(s2Str.split('/')[0]) || 0;
+      const w2 = parseInt(s2Str.split('/')[1]) || 0;
+      const teamSize = Math.max(match.team2Players?.length || 11, 2);
+
+      if (s1 > s2) {
+        resultText = `${match.team1} won by ${s1 - s2} runs`;
+      } else if (s2 > s1) {
+        const wicketsLeft = (teamSize - 1) - w2;
+        resultText = `${match.team2} won by ${Math.max(wicketsLeft, 0)} wickets`;
+      } else {
+        resultText = 'Match Tied';
+      }
+    } else {
+      resultText = 'Match Completed';
+    }
+  } else if (match.status === 'Live') {
+    resultText = 'Ongoing';
   }
 
   const renderTeamRow = (teamName: string, logo: string | undefined, score: string | undefined, isTeam1: boolean) => {
     return (
       <View style={s.teamRow}>
-        <View style={[s.teamLogo, { backgroundColor: logo || (isTeam1 ? '#EF4444' : '#3B82F6') }]}>
-          <Ionicons name="shield" size={12} color="#FFF" />
+        <View style={[s.teamLogo, { backgroundColor: '#F3F4F6' }]}>
+          {logo ? (
+            <Text style={{fontSize: 16}}>{logo}</Text>
+          ) : (
+            <Ionicons name="shield" size={16} color={isTeam1 ? '#EF4444' : '#3B82F6'} />
+          )}
         </View>
         <Text style={s.teamName} numberOfLines={1}>{teamName}</Text>
         {(match.status === 'Live' || match.status === 'Completed') && score ? (
@@ -46,9 +89,9 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
       <View style={s.mainRow}>
         {/* Teams & Scores */}
         <View style={s.teamsCol}>
-          {renderTeamRow(match.team1, match.team1Logo, match.score1, true)}
+          {renderTeamRow(match.team1, match.team1Logo, displayScore1, true)}
           <View style={{ height: 12 }} />
-          {renderTeamRow(match.team2, match.team2Logo, match.score2, false)}
+          {renderTeamRow(match.team2, match.team2Logo, displayScore2, false)}
         </View>
 
         {/* Status / Result */}

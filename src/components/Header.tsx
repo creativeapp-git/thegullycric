@@ -3,17 +3,20 @@ import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { auth } from '../services/firebase';
 import { getUserProfile } from '../services/userService';
+import { AppNavigationProp } from '../navigation/navigation.types';
 
 const Header: React.FC = () => {
   const [username, setUsername] = useState('Player');
-  const navigation = useNavigation<any>();
+  const [avatar, setAvatar] = useState('');
+  const navigation = useNavigation<AppNavigationProp>();
 
   useEffect(() => {
     const fetchUser = async () => {
       if (auth.currentUser) {
         const profile = await getUserProfile(auth.currentUser.uid);
-        if (profile && profile.username) {
-          setUsername(profile.username);
+        if (profile) {
+          if (profile.username) setUsername(profile.username);
+          if (profile.avatar) setAvatar(profile.avatar);
         }
       }
     };
@@ -30,9 +33,13 @@ const Header: React.FC = () => {
       <View style={styles.greetingContainer}>
         <Text style={styles.greetingText}>Hey there, {username} <Text style={{fontSize: 18}}>👋</Text></Text>
       </View>
-      <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+      <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Settings' })}>
         <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
+          {avatar ? (
+            <Text style={{fontSize: 20}}>{avatar}</Text>
+          ) : (
+            <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
+          )}
         </View>
       </TouchableOpacity>
     </View>

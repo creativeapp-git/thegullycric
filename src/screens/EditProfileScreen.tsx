@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../services/firebase';
@@ -21,6 +21,10 @@ const EditProfileScreen = () => {
   
   const [editsCount, setEditsCount] = useState(0);
   const [canEdit, setCanEdit] = useState(true);
+  const [avatar, setAvatar] = useState('');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+
+  const AVATARS = ['🏏', '⚾', '🎯', '🏆', '🦁', '🐯', '🦅', '🐘', '🔥', '⚡', '🌟', '💎', '🎪', '🛡️', '👑', '🎭'];
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -43,6 +47,7 @@ const EditProfileScreen = () => {
           setName(userProfile.name || '');
           setUsername(userProfile.username || '');
           setOriginalUsername(userProfile.username || '');
+          setAvatar(userProfile.avatar || '');
           
           const currentMonth = new Date().toISOString().slice(0, 7);
           const profileEdits = userProfile.profileEdits;
@@ -127,6 +132,7 @@ const EditProfileScreen = () => {
       await updateUserProfile(auth.currentUser.uid, {
         name: name.trim(),
         username,
+        avatar,
         profileEdits: {
           count: editsCount + 1,
           month: currentMonth
@@ -166,9 +172,17 @@ const EditProfileScreen = () => {
       </View>
 
       <View style={styles.avatarSection}>
-        <View style={styles.avatarCircle}>
-          <Ionicons name="person" size={48} color="#10B981" />
-        </View>
+        <TouchableOpacity style={styles.avatarCircle} onPress={() => setShowAvatarPicker(true)}>
+          {avatar ? (
+            <Text style={{fontSize: 40}}>{avatar}</Text>
+          ) : (
+            <Ionicons name="person" size={48} color="#10B981" />
+          )}
+          <View style={styles.avatarEditBadge}>
+            <Ionicons name="pencil" size={12} color="#FFF" />
+          </View>
+        </TouchableOpacity>
+        <Text style={{color: '#6B7280', fontSize: 13, marginTop: 8}}>Tap to change avatar</Text>
         <Text style={styles.phoneDisplay}>
           {profile?.phoneNumber || 'No phone'}
         </Text>
@@ -233,7 +247,7 @@ const EditProfileScreen = () => {
   );
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
+    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any }]}>
       {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           {content}
@@ -241,6 +255,29 @@ const EditProfileScreen = () => {
       ) : (
         content
       )}
+
+      {/* Avatar Picker Modal */}
+      <Modal visible={showAvatarPicker} transparent animationType="slide">
+        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end'}}>
+          <View style={{backgroundColor:'#FFF', padding:24, borderTopLeftRadius:24, borderTopRightRadius:24}}>
+            <Text style={{fontSize:20, fontWeight:'800', color:'#111827', marginBottom:20}}>Choose Avatar</Text>
+            <View style={{flexDirection:'row', flexWrap:'wrap', gap:12, justifyContent:'center', marginBottom:24}}>
+              {AVATARS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={{width:60, height:60, borderRadius:30, backgroundColor: avatar===emoji ? '#10B981' : '#F3F4F6', justifyContent:'center', alignItems:'center', borderWidth: avatar===emoji ? 3 : 0, borderColor:'#059669'}}
+                  onPress={() => { setAvatar(emoji); setShowAvatarPicker(false); }}
+                >
+                  <Text style={{fontSize:28}}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={{padding:16, backgroundColor:'#F3F4F6', borderRadius:12, alignItems:'center'}} onPress={() => setShowAvatarPicker(false)}>
+              <Text style={{fontWeight:'700', color:'#6B7280'}}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -253,7 +290,8 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
   avatarSection: { alignItems: 'center', marginBottom: 32 },
-  avatarCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 4, position: 'relative' as any },
+  avatarEditBadge: { position: 'absolute' as any, bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
   phoneDisplay: { fontSize: 16, color: '#6B7280', marginBottom: 12, fontWeight: '500' },
   limitsBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   limitsText: { fontSize: 14, color: '#D97706', fontWeight: '700', marginLeft: 6 },

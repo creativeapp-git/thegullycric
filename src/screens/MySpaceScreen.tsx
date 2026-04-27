@@ -85,7 +85,7 @@ const MySpaceScreen = () => {
   );
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
+    <View style={styles.container}>
       <Header />
       
       <View style={styles.actionContainer}>

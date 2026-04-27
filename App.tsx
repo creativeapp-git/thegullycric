@@ -10,12 +10,25 @@ import AppNavigator from './src/navigation/AppNavigator';
 if (Platform.OS === 'web') {
   const style = document.createElement('style');
   style.textContent = `
-    html, body, #root {
-      height: 100vh;
+    html, body {
+      height: 100%;
       width: 100%;
-      overflow: hidden;
       margin: 0;
       padding: 0;
+      overflow: hidden;
+    }
+    #root {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Ensure all RN scroll containers work on web */
+    [data-testid], [class*="r-overflow"] {
+      -webkit-overflow-scrolling: touch;
     }
   `;
   document.head.appendChild(style);

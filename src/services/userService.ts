@@ -26,7 +26,11 @@ export const isPhoneNumberTaken = async (phoneNumber: string): Promise<boolean> 
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
     const snapshot = await getDocs(q);
-    return !snapshot.empty;
+    if (snapshot.empty) return false;
+    // If the only match is the current user, it's not "taken"
+    const currentUid = auth.currentUser?.uid;
+    if (currentUid && snapshot.size === 1 && snapshot.docs[0].id === currentUid) return false;
+    return true;
   } catch (error) {
     console.error('Error checking phone number:', error);
     throw error;
@@ -37,7 +41,10 @@ export const isPhoneNumberTaken = async (phoneNumber: string): Promise<boolean> 
 export const createUserProfile = async (userId: string, userData: Partial<User>) => {
   try {
     const userRef = doc(db, 'users', userId);
+    // Spread userData first, then override with sanitized/required fields
+    // so that explicit values (e.g. lowercased username) are not overwritten
     await setDoc(userRef, {
+      ...userData,
       id: userId,
       username: userData.username?.toLowerCase() || '',
       name: userData.name || '',
@@ -45,7 +52,7 @@ export const createUserProfile = async (userId: string, userData: Partial<User>)
       phoneNumber: userData.phoneNumber || '',
       avatar: userData.avatar || '',
       bio: userData.bio || '',
-      preferences: {
+      preferences: userData.preferences || {
         theme: 'light',
         defaultRules: {
           wideExtra: true,
@@ -53,7 +60,6 @@ export const createUserProfile = async (userId: string, userData: Partial<User>)
         },
         enableAnimation: true,
       },
-      ...userData,
       profileEdits: {
         count: 0,
         month: new Date().toISOString().slice(0, 7) // e.g. "2026-04"

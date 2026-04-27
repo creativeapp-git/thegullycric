@@ -43,6 +43,23 @@ const MatchDetailScreen = () => {
   };
 
   useFocusEffect(useCallback(() => { fetchMatch(); }, []));
+  
+  // Auto-poll for live matches so spectators see real-time scores
+  useEffect(() => {
+    if (match?.status === 'Live') {
+      const interval = setInterval(async () => {
+        try {
+          const data = await getMatchById(matchId);
+          if (data) {
+            setMatch(data);
+            if (data.status === 'Completed') clearInterval(interval);
+          }
+        } catch (e) { /* silent */ }
+      }, 10000); // Poll every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [match?.status, matchId]);
+
   const onRefresh = () => { setRefreshing(true); fetchMatch(); };
 
   const isOwner = match?.createdBy === auth.currentUser?.uid;
@@ -93,9 +110,11 @@ const MatchDetailScreen = () => {
       if (b.runs === 4 && !b.isBye && !b.isLegBye) batters[b.batter].fours += 1;
       if (b.runs === 6 && !b.isBye && !b.isLegBye) batters[b.batter].sixes += 1;
       
-      // Process Bowler
-      if (!b.isBye && !b.isLegBye) bowlers[b.bowler].runs += b.runs;
-      if (b.isWide || b.isNoBall) bowlers[b.bowler].runs += b.extras;
+      // Process Bowler runs: only charge runs directly off the bat (not byes/leg-byes)
+      // plus wide/no-ball extras
+      const bowlerRunsFromBat = (b.isBye || b.isLegBye) ? 0 : b.runs;
+      const bowlerExtras = (b.isWide || b.isNoBall) ? b.extras : 0;
+      bowlers[b.bowler].runs += bowlerRunsFromBat + bowlerExtras;
       if (!b.isWide && !b.isNoBall) {
         bowlers[b.bowler].legalBalls += 1;
         currentLegalBalls += 1;
@@ -153,36 +172,74 @@ const MatchDetailScreen = () => {
   
   const { batters, bowlers, fow } = buildScorecard(scorecardInnings);
 
-  const renderInfoTab = () => (
-    <View style={s.tabContent}>
-      <View style={s.card}>
-        <Text style={s.cardTitle}>Match Information</Text>
-        <Text style={s.infoText}><Text style={s.infoLabel}>Location:</Text> {match.location}</Text>
-        <Text style={s.infoText}><Text style={s.infoLabel}>Format:</Text> {match.type} ({match.overs} Overs)</Text>
-        <Text style={s.infoText}><Text style={s.infoLabel}>Date:</Text> {match.date} at {match.time}</Text>
-        <Text style={s.infoText}><Text style={s.infoLabel}>Match ID:</Text> {match.matchId}</Text>
-        {match.description && <Text style={s.infoText}><Text style={s.infoLabel}>Bio:</Text> {match.description}</Text>}
-      </View>
+  const renderInfoTab = () => {
+    const inn1 = buildScorecard(1);
+    const inn2 = buildScorecard(2);
+    const allBatters = [...inn1.batters, ...inn2.batters].sort((a, b) => b.runs - a.runs);
+    const allBowlers = [...inn1.bowlers, ...inn2.bowlers].sort((a, b) => b.wickets - a.wickets || a.runs - b.runs);
+    
+    const topBatter = allBatters[0];
+    const topBowler = allBowlers[0];
 
-      {match.tossWinner && (
-        <View style={s.tossCard}>
-          <Ionicons name="trophy-outline" size={16} color="#F59E0B" />
-          <Text style={s.tossText}>{match.tossWinner} won the toss and chose to {match.tossDecision?.toLowerCase()}</Text>
-        </View>
-      )}
+    return (
+      <View style={s.tabContent}>
+        {/* Top Performers */}
+        {(topBatter || topBowler) && match.status !== 'Scheduled' && (
+          <View style={s.performersRow}>
+            {topBatter && (
+              <View style={[s.performerCard, { marginRight: 12 }]}>
+                <Ionicons name="medal" size={24} color="#F59E0B" />
+                <Text style={s.performerLabel}>Top Batter</Text>
+                <Text style={s.performerName} numberOfLines={1}>{topBatter.name}</Text>
+                <Text style={s.performerStats}>{topBatter.runs} ({topBatter.balls})</Text>
+              </View>
+            )}
+            {topBowler && (
+              <View style={s.performerCard}>
+                <Ionicons name="star" size={24} color="#3B82F6" />
+                <Text style={s.performerLabel}>Top Bowler</Text>
+                <Text style={s.performerName} numberOfLines={1}>{topBowler.name}</Text>
+                <Text style={s.performerStats}>{topBowler.wickets} Wkts, {topBowler.runs} R</Text>
+              </View>
+            )}
+          </View>
+        )}
 
-      <View style={{ flexDirection: 'row', gap: 16 }}>
-        <View style={[s.card, { flex: 1 }]}>
-          <Text style={s.cardTitle}>{match.team1}</Text>
-          {match.team1Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Match Information</Text>
+          <Text style={s.infoText}><Text style={s.infoLabel}>Location:</Text> {match.location}</Text>
+          <Text style={s.infoText}><Text style={s.infoLabel}>Format:</Text> {match.type} ({match.overs} Overs)</Text>
+          <Text style={s.infoText}><Text style={s.infoLabel}>Date:</Text> {match.date} at {match.time}</Text>
+          <Text style={s.infoText}><Text style={s.infoLabel}>Match ID:</Text> {match.matchId}</Text>
+          {match.description && <Text style={s.infoText}><Text style={s.infoLabel}>Bio:</Text> {match.description}</Text>}
         </View>
-        <View style={[s.card, { flex: 1 }]}>
-          <Text style={s.cardTitle}>{match.team2}</Text>
-          {match.team2Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+
+        {match.tossWinner && (
+          <View style={s.tossCard}>
+            <Ionicons name="trophy-outline" size={16} color="#F59E0B" />
+            <Text style={s.tossText}>{match.tossWinner} won the toss and chose to {match.tossDecision?.toLowerCase()}</Text>
+          </View>
+        )}
+
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <View style={[s.card, { flex: 1 }]}>
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
+              {match.team1Logo && <Text style={{fontSize: 20, marginRight: 8}}>{match.team1Logo}</Text>}
+              <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team1}</Text>
+            </View>
+            {match.team1Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+          </View>
+          <View style={[s.card, { flex: 1 }]}>
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
+              {match.team2Logo && <Text style={{fontSize: 20, marginRight: 8}}>{match.team2Logo}</Text>}
+              <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team2}</Text>
+            </View>
+            {match.team2Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderScorecardTab = () => (
     <View style={s.tabContent}>
@@ -258,7 +315,7 @@ const MatchDetailScreen = () => {
   );
 
   return (
-    <View style={[s.root, Platform.OS === 'web' && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+    <View style={s.root}>
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} color="#1F2937" />
@@ -334,6 +391,11 @@ const s = StyleSheet.create({
   tabTextActive: { color: '#111827' },
 
   tabContent: { marginTop: 4 },
+  performersRow: { flexDirection: 'row', marginBottom: 16 },
+  performerCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  performerLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginTop: 8 },
+  performerName: { fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 4 },
+  performerStats: { fontSize: 13, color: '#10B981', fontWeight: '600', marginTop: 2 },
   card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
   infoText: { fontSize: 14, color: '#374151', marginBottom: 8, lineHeight: 20 },

@@ -1,5 +1,13 @@
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RouteProp } from '@react-navigation/native';
+import { RouteProp, NavigatorScreenParams } from '@react-navigation/native';
+
+// Bottom tab screens
+export type TabParamList = {
+  Home: undefined;
+  'My Space': undefined;
+  Fixtures: undefined;
+  Settings: undefined;
+};
 
 // Root level navigators
 export type RootStackParamList = {
@@ -16,23 +24,17 @@ export type AuthStackParamList = {
 
 // App stack screens
 export type AppStackParamList = {
-  Tabs: undefined;
-  CreateMatch: undefined;
+  Tabs: NavigatorScreenParams<TabParamList> | undefined;
+  CreateMatch: { matchId?: string } | undefined;
   MatchDetail: { matchId: string };
   Scoring: { matchId: string };
   EditProfile: undefined;
 };
 
-// Bottom tab screens
-export type TabParamList = {
-  Home: undefined;
-  'My Space': undefined;
-  Fixtures: undefined;
-  Settings: undefined;
-};
-
-// Typed navigation props for different stacks
-export type AppNavigationProp = StackNavigationProp<RootStackParamList & AuthStackParamList & AppStackParamList>;
+// Typed navigation props — union of all stacks for convenience
+export type AppNavigationProp = StackNavigationProp<
+  RootStackParamList & AuthStackParamList & AppStackParamList
+>;
 
 // Typed route props
 export type MatchDetailRouteProp = RouteProp<AppStackParamList, 'MatchDetail'>;

@@ -45,17 +45,25 @@ const EmailSignupScreen = () => {
     }
   };
 
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const handleSignup = async () => {
     if (!email || !email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      showAlert('Error', 'Please enter a valid email address');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showAlert('Error', 'Password must be at least 6 characters');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert('Error', 'Passwords do not match');
       return;
     }
 
@@ -68,7 +76,7 @@ const EmailSignupScreen = () => {
       if (error.code === 'auth/email-already-in-use') {
         msg = 'This email is already in use.';
       }
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -77,9 +85,9 @@ const EmailSignupScreen = () => {
   const handleResend = async () => {
     try {
       await resendVerificationEmail();
-      Alert.alert('Sent', 'Verification email resent.');
+      showAlert('Sent', 'Verification email resent.');
     } catch (e) {
-      Alert.alert('Error', 'Failed to resend email. Try again later.');
+      showAlert('Error', 'Failed to resend email. Try again later.');
     }
   };
 
@@ -236,6 +244,7 @@ const styles = StyleSheet.create({
   createAccountContainer: { alignItems: 'center', paddingVertical: 12 },
   createAccountText: { color: '#6B7280', fontSize: 15, fontWeight: '500' },
   createAccountBold: { color: '#10B981', fontWeight: '700' },
+  iconCircle: { backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' },
   verificationText: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 24, paddingHorizontal: 16 },
 });
 

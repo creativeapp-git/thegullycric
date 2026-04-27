@@ -76,7 +76,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
+    <View style={styles.container}>
       <Header />
 
       {/* Search Bar */}
@@ -104,7 +104,7 @@ const HomeScreen = () => {
         ) : (
           <FlatList
             data={data}
-            keyExtractor={(item, index) => item.id || `header-${index}`}
+            keyExtractor={(item: any, index) => ('id' in item && item.id) ? item.id : `item-${index}`}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
