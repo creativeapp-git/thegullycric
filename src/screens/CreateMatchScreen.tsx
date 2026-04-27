@@ -374,10 +374,10 @@ const CreateMatchScreen = () => {
 
       <View style={s.card}>
         <View style={s.teamTabs}>
-          <TouchableOpacity style={[s.teamTab, addingToTeam === 1 && s.teamTabActive, {borderBottomColor: team1Logo}]} onPress={() => setAddingToTeam(1)}>
+          <TouchableOpacity style={[s.teamTab, addingToTeam === 1 && s.teamTabActive]} onPress={() => setAddingToTeam(1)}>
             <Text style={[s.teamTabText, addingToTeam === 1 && s.teamTabTextActive]}>{team1 || 'Team 1'} ({team1Players.length})</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.teamTab, addingToTeam === 2 && s.teamTabActive, {borderBottomColor: team2Logo}]} onPress={() => setAddingToTeam(2)}>
+          <TouchableOpacity style={[s.teamTab, addingToTeam === 2 && s.teamTabActive]} onPress={() => setAddingToTeam(2)}>
             <Text style={[s.teamTabText, addingToTeam === 2 && s.teamTabTextActive]}>{team2 || 'Team 2'} ({team2Players.length})</Text>
           </TouchableOpacity>
         </View>
