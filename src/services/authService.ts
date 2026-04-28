@@ -5,6 +5,7 @@ import {
   sendEmailVerification,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
 } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -71,8 +72,10 @@ export const signOutUser = async () => {
 export const signInWithGoogleWeb = async () => {
   try {
     const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
+    await signInWithRedirect(auth, provider);
+    // Note: With redirect, this function won't return a user immediately.
+    // The page will redirect to Google, and upon return, Firebase's onAuthStateChanged
+    // listener in App.tsx will automatically detect the sign-in and navigate to Home.
   } catch (error: any) {
     throw error;
   }
