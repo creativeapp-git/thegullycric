@@ -71,14 +71,7 @@ const EmailSignupScreen = () => {
     }
   };
 
-  const handleResend = async () => {
-    try {
-      await resendVerificationEmail();
-      showAlert('Sent', 'Verification email resent.');
-    } catch (e) {
-      showAlert('Error', 'Failed to resend email. Try again later.');
-    }
-  };
+
 
   const content = (
     <ScrollView 
@@ -182,9 +175,6 @@ const EmailSignupScreen = () => {
           
           <ActivityIndicator color="#10B981" size="large" style={{ marginVertical: 32 }} />
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleResend}>
-            <Text style={styles.secondaryButtonText}>Resend Email</Text>
-          </TouchableOpacity>
         </View>
       )}
     </ScrollView>

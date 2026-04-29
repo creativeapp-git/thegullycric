@@ -137,8 +137,8 @@ const ProfileSetupScreen = () => {
         username,
         name: name.trim(),
         phoneNumber: formattedPhone,
+
         email: session?.user?.email || '',
-        bio: 'Cricket enthusiast 🏏',
       });
       DeviceEventEmitter.emit('profileUpdated');
     } catch (error: any) {

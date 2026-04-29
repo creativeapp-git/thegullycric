@@ -2,12 +2,13 @@ import { supabase } from './supabase';
 
 export interface UserProfile {
   id?: string;
-  uid: string;
+  uid?: string;
   email: string;
-  displayName: string;
+  name?: string;
   username?: string;
   phoneNumber?: string;
-  photoURL?: string;
+  avatar?: string;
+  profileEdits?: { count: number; month: string };
   createdAt?: string;
 }
 
