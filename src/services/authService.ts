@@ -4,7 +4,6 @@ import {
   signOut,
   sendEmailVerification,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
 } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
