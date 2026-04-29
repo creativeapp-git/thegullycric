@@ -2,7 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { User } from 'firebase/auth';
+import { User } from '@supabase/supabase-js';
 
 import HomeScreen from '../screens/HomeScreen';
 import MySpaceScreen from '../screens/MySpaceScreen';
@@ -85,7 +85,7 @@ const AppNavigator = ({ user, hasProfile }: AppNavigatorProps) => {
       {!user ? (
         <RootStack.Screen name="Auth" component={AuthNavigator} />
       ) : !hasProfile ? (
-        <RootStack.Screen name="ProfileSetup" component={ProfileSetupScreen} initialParams={{ uid: user.uid }} />
+        <RootStack.Screen name="ProfileSetup" component={ProfileSetupScreen} initialParams={{ uid: user.id }} />
       ) : (
         <RootStack.Screen name="App" component={MainAppNavigator} />
       )}

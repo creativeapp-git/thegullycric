@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { signUpWithEmail, resendVerificationEmail, signInWithGoogleWeb } from '../services/authService';
-import { auth } from '../services/firebase';
+import { signUpWithEmail, signInWithGoogleWeb } from '../services/authService';
+import { supabase } from '../services/supabase';
 import { AppNavigationProp } from '../navigation/navigation.types';
 
 const EmailSignupScreen = () => {
@@ -14,18 +14,7 @@ const EmailSignupScreen = () => {
   const [loading, setLoading] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (verificationSent && auth.currentUser) {
-      interval = setInterval(async () => {
-        await auth.currentUser?.reload();
-        if (auth.currentUser?.emailVerified) {
-          clearInterval(interval);
-        }
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [verificationSent]);
+
 
   const handleGoogleSignup = async () => {
     if (Platform.OS !== 'web') {

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { auth } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { createMatch, getUserMatches, getMatchById, updateMatch } from '../services/matchService';
 import { Match } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
@@ -93,9 +93,10 @@ const CreateMatchScreen = () => {
   };
 
   const fetchRecentPlayers = async () => {
-    if (!auth.currentUser) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
     try {
-      const matches = await getUserMatches(auth.currentUser.uid);
+      const matches = await getUserMatches(session.user.id);
       const players = new Set<string>();
       matches.forEach(m => {
         m.team1Players?.forEach(p => players.add(p));
@@ -174,7 +175,8 @@ const CreateMatchScreen = () => {
   };
 
   const saveMatch = async (status: 'Scheduled' | 'Live') => {
-    if (!auth.currentUser) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
       showAlert('Error', 'You must be logged in');
       return null;
     }
@@ -209,7 +211,7 @@ const CreateMatchScreen = () => {
           tossDecision,
           currentInnings: 1,
           status,
-          createdBy: auth.currentUser.uid,
+          createdBy: session.user.id,
           rules: { wideExtraRun, noBallExtraRun, ballByBall },
           ballLog: [],
         };

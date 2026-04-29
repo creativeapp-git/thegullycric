@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { signOutUser } from '../services/authService';
-import { auth } from '../services/firebase';
-import { getUserProfile, updateUserProfile } from '../services/userService';
+import { supabase } from '../services/supabase';
+import { getUserProfile, saveUserProfile } from '../services/userService';
 import { User } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
 
@@ -28,8 +28,9 @@ const SettingsScreen = () => {
   );
 
   const loadProfile = async () => {
-    if (auth.currentUser) {
-      const userProfile = await getUserProfile(auth.currentUser.uid);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const userProfile = await getUserProfile(session.user.id);
       if (userProfile) setProfile(userProfile);
     }
   };
@@ -200,7 +201,7 @@ const SettingsScreen = () => {
                 • Account information (email, username, name){'\n'}
                 • Match data you create and manage{'\n'}
                 • Device information for app performance{'\n\n'}
-                We do not sell your data to third parties. Your match data is stored securely using Google Firebase infrastructure.{'\n\n'}
+                We do not sell your data to third parties. Your match data is stored securely using Supabase infrastructure.{'\n\n'}
                 You can request account deletion by contacting us at {SUPPORT_EMAIL}.
               </Text>
               <Text style={{fontSize:16, fontWeight:'700', color:'#111827', marginBottom:8}}>Contact Us</Text>

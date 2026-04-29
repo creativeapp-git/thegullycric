@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { auth } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { getUserProfile } from '../services/userService';
 import { AppNavigationProp } from '../navigation/navigation.types';
 
@@ -11,16 +11,17 @@ const Header: React.FC = () => {
   const navigation = useNavigation<AppNavigationProp>();
 
   useEffect(() => {
-    const fetchUser = async () => {
-      if (auth.currentUser) {
-        const profile = await getUserProfile(auth.currentUser.uid);
+    const loadProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await getUserProfile(session.user.id);
         if (profile) {
           if (profile.username) setUsername(profile.username);
           if (profile.avatar) setAvatar(profile.avatar);
         }
       }
     };
-    fetchUser();
+    loadProfile();
   }, []);
 
   return (

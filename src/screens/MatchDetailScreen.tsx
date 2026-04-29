@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getMatchById, updateMatch } from '../services/matchService';
 import { Match, BallEvent } from '../types';
 import { AppNavigationProp, MatchDetailRouteProp } from '../navigation/navigation.types';
-import { auth } from '../services/firebase';
+import { supabase } from '../services/supabase';
 
 interface BatterStats { name: string; runs: number; balls: number; fours: number; sixes: number; outStr: string; }
 interface BowlerStats { name: string; legalBalls: number; runs: number; wickets: number; economy: string; }
@@ -22,8 +22,15 @@ const MatchDetailScreen = () => {
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'Info' | 'Scorecard'>('Info');
   const [scorecardInnings, setScorecardInnings] = useState<1 | 2>(1);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id || null);
+    });
+  }, []);
 
   const fetchMatch = async () => {
     try {
@@ -62,7 +69,7 @@ const MatchDetailScreen = () => {
 
   const onRefresh = () => { setRefreshing(true); fetchMatch(); };
 
-  const isOwner = match?.createdBy === auth.currentUser?.uid;
+  const isOwner = match?.createdBy === currentUserId;
 
   const handleShare = async () => {
     if (!match) return;

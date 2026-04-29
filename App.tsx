@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { User } from '@supabase/supabase-js';
+import { supabase } from './src/services/supabase';
 import { DeviceEventEmitter, Platform } from 'react-native';
-import { auth } from './src/services/firebase';
-import { getUserProfile } from './src/services/userService';
 import AppNavigator from './src/navigation/AppNavigator';
+import { getUserProfile } from './src/services/userService';
 
 if (Platform.OS === 'web') {
   const style = document.createElement('style');
@@ -49,28 +49,36 @@ export default function App() {
       }
     };
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log('Auth state changed:', firebaseUser ? 'logged in' : 'logged out', firebaseUser?.uid);
-      setUser(firebaseUser);
-
-      if (firebaseUser) {
-        await checkProfile(firebaseUser.uid);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        checkProfile(session.user.id);
       } else {
         setHasProfile(false);
       }
-
       setLoading(false);
     });
 
-    const profileSub = DeviceEventEmitter.addListener('profileUpdated', () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        checkProfile(currentUser.uid);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state changed:', session ? 'logged in' : 'logged out', session?.user?.id);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        await checkProfile(session.user.id);
+      } else {
+        setHasProfile(false);
+      }
+    });
+
+    const profileSub = DeviceEventEmitter.addListener('profileUpdated', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        checkProfile(session.user.id);
       }
     });
 
     return () => {
-      unsubscribe();
+      subscription.unsubscribe();
       profileSub.remove();
     };
   }, []);

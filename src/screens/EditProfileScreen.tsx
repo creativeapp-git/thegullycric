@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../services/firebase';
-import { getUserProfile, updateUserProfile, isUsernameTaken } from '../services/userService';
+import { supabase } from '../services/supabase';
+import { getUserProfile, saveUserProfile, isUsernameTaken } from '../services/userService';
 import { User } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
 
@@ -40,8 +40,9 @@ const EditProfileScreen = () => {
 
   const loadProfile = async () => {
     try {
-      if (auth.currentUser) {
-        const userProfile = await getUserProfile(auth.currentUser.uid);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const userProfile = await getUserProfile(session.user.id);
         if (userProfile) {
           setProfile(userProfile);
           setName(userProfile.name || '');
@@ -113,7 +114,8 @@ const EditProfileScreen = () => {
       return;
     }
 
-    if (!auth.currentUser) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
 
     setSaving(true);
     try {
@@ -129,7 +131,7 @@ const EditProfileScreen = () => {
 
       const currentMonth = new Date().toISOString().slice(0, 7);
       
-      await updateUserProfile(auth.currentUser.uid, {
+      await saveUserProfile(session.user.id, {
         name: name.trim(),
         username,
         avatar,

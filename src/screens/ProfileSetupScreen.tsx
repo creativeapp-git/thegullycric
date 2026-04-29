@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, DeviceEventEmitter, useWindowDimensions, Image } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../services/firebase';
-import { createUserProfile, getUserProfile, isUsernameTaken, isPhoneNumberTaken } from '../services/userService';
+import { supabase } from '../services/supabase';
+import { saveUserProfile, getUserProfile, isUsernameTaken, isPhoneNumberTaken } from '../services/userService';
 import { AppNavigationProp, ProfileSetupRouteProp } from '../navigation/navigation.types';
 
 const ProfileSetupScreen = () => {
@@ -131,11 +131,13 @@ const ProfileSetupScreen = () => {
         return;
       }
 
-      await createUserProfile(uid, {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      await saveUserProfile(uid, {
         username,
         name: name.trim(),
         phoneNumber: formattedPhone,
-        email: auth.currentUser?.email || '',
+        email: session?.user?.email || '',
         bio: 'Cricket enthusiast 🏏',
       });
       DeviceEventEmitter.emit('profileUpdated');

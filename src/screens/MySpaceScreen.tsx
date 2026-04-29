@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Alert } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { getUserMatches, deleteMatch } from '../services/matchService';
 import { Match } from '../types';
 import Header from '../components/Header';
@@ -18,17 +18,16 @@ const MySpaceScreen = () => {
 
   useFocusEffect(
     React.useCallback(() => {
-      if (auth.currentUser) {
-        fetchUserMatches();
-      }
+      fetchUserMatches();
     }, [])
   );
 
   const fetchUserMatches = async () => {
     try {
       setLoading(true);
-      if (auth.currentUser) {
-        const matches = await getUserMatches(auth.currentUser.uid);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const matches = await getUserMatches(session.user.id);
         setUserMatches(matches.filter(m => !m.isDeleted));
       }
     } catch (error) {
