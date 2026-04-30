@@ -142,20 +142,38 @@ const ProfileSetupScreen = () => {
       }
 
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Saving profile for UID:', uid);
       
       if (password) {
+        console.log('Updating password...');
         const { error: authError } = await supabase.auth.updateUser({ password });
-        if (authError) throw authError;
+        if (authError) {
+          console.error('Password update error:', authError);
+          throw authError;
+        }
       }
 
-      await saveUserProfile(uid, {
-        username,
+      const profileData = {
+        username: username.trim(),
         name: name.trim(),
         phoneNumber: formattedPhone,
         email: session?.user?.email || '',
-      });
+      };
+
+      console.log('Profile data:', profileData);
+      await saveUserProfile(uid, profileData);
+      console.log('Profile saved successfully');
+      
       DeviceEventEmitter.emit('profileUpdated');
+      
+      // Explicitly tell the user it worked
+      if (Platform.OS === 'web') {
+        window.alert('Profile set up successfully!');
+      } else {
+        Alert.alert('Success', 'Profile set up successfully!');
+      }
     } catch (error: any) {
+      console.error('Setup error details:', error);
       Alert.alert('Error', error.message || 'Failed to set up profile. Please try again.');
     } finally {
       setSaving(false);

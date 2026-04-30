@@ -41,10 +41,13 @@ export default function App() {
 
   useEffect(() => {
     const checkProfile = async (uid: string) => {
+      console.log('Checking profile for:', uid);
       try {
         const profile = await getUserProfile(uid);
+        console.log('Profile found:', profile ? 'Yes' : 'No', profile?.username);
         setHasProfile(!!(profile && profile.username));
       } catch (e) {
+        console.error('checkProfile error:', e);
         setHasProfile(false);
       }
     };
