@@ -32,6 +32,15 @@ if (Platform.OS === 'web') {
     }
   `;
   document.head.appendChild(style);
+
+  // Clean up stale service workers to prevent white screens on new deployments
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    });
+  }
 }
 
 export default function App() {
@@ -49,17 +58,20 @@ export default function App() {
       } catch (e) {
         console.error('checkProfile error:', e);
         setHasProfile(false);
+      } finally {
+        setLoading(false);
       }
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Session retrieved:', session?.user?.id);
       setUser(session?.user ?? null);
       if (session?.user) {
         checkProfile(session.user.id);
       } else {
         setHasProfile(false);
+        setLoading(false);
       }
-      setLoading(false);
     }).catch(error => {
       console.error('Session error:', error);
       setLoading(false);
@@ -92,7 +104,12 @@ export default function App() {
   }, []);
 
   if (loading) {
-    return null; // A proper splash screen could go here
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAFAFA' }}>
+        <ActivityIndicator size="large" color="#10B981" />
+        <Text style={{ marginTop: 16, color: '#6B7280', fontWeight: '500' }}>Initializing GullyCric...</Text>
+      </View>
+    );
   }
 
   return (

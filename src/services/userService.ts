@@ -13,13 +13,19 @@ export interface UserProfile {
 }
 
 export const saveUserProfile = async (uid: string, data: Partial<UserProfile>) => {
+  console.log('Attempting to save user profile in Supabase...', uid, data);
   try {
     const { error } = await supabase
       .from('users')
       .upsert({ id: uid, ...data }, { onConflict: 'id' });
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase upsert error:', error);
+      throw error;
+    }
+    console.log('Profile upsert successful');
   } catch (error: any) {
+    console.error('saveUserProfile caught exception:', error);
     throw new Error(error.message);
   }
 };
