@@ -12,7 +12,7 @@ export const signInWithUsernameOrEmail = async (identifier: string, password: st
       const { data, error } = await supabase
         .from('users')
         .select('email')
-        .eq('displayName', identifier)
+        .eq('username', identifier)
         .single();
         
       if (data && data.email) {

@@ -18,6 +18,8 @@ const ProfileSetupScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
@@ -109,6 +111,14 @@ const ProfileSetupScreen = () => {
       Alert.alert('Error', 'This phone number is already registered.');
       return;
     }
+    if (password && password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -133,11 +143,15 @@ const ProfileSetupScreen = () => {
 
       const { data: { session } } = await supabase.auth.getSession();
       
+      if (password) {
+        const { error: authError } = await supabase.auth.updateUser({ password });
+        if (authError) throw authError;
+      }
+
       await saveUserProfile(uid, {
         username,
         name: name.trim(),
         phoneNumber: formattedPhone,
-
         email: session?.user?.email || '',
       });
       DeviceEventEmitter.emit('profileUpdated');
@@ -217,6 +231,30 @@ const ProfileSetupScreen = () => {
           {!checkingPhone && phoneAvailable === false && <Ionicons name="close-circle" size={24} color="#EF4444" style={styles.statusIcon} />}
         </View>
         {phoneAvailable === false && <Text style={styles.errorHint}>This number is already registered</Text>}
+
+        <Text style={styles.label}>Set Password (Optional)</Text>
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.inputField}
+            placeholder="Min 6 characters"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+
+        <Text style={styles.label}>Confirm Password</Text>
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.inputField}
+            placeholder="Repeat password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
       </View>
 
       <TouchableOpacity
