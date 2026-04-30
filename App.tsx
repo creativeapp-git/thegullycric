@@ -57,6 +57,9 @@ export default function App() {
         setHasProfile(false);
       }
       setLoading(false);
+    }).catch(error => {
+      console.error('Session error:', error);
+      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
