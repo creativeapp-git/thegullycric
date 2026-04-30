@@ -25,6 +25,8 @@ const MatchDetailScreen = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'Info' | 'Scorecard'>('Info');
   const [scorecardInnings, setScorecardInnings] = useState<1 | 2>(1);
+  const [scorecardData, setScorecardData] = useState<any>(null);
+  const [scorecardLoading, setScorecardLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,6 +42,7 @@ const MatchDetailScreen = () => {
       if (data && data.status !== 'Scheduled') {
         setActiveTab('Scorecard');
         if (data.currentInnings === 2) setScorecardInnings(2);
+        fetchScorecardStats(matchId, data.currentInnings || 1);
       }
     } catch (error) {
       console.error('Error fetching match:', error);
@@ -48,6 +51,28 @@ const MatchDetailScreen = () => {
       setRefreshing(false);
     }
   };
+
+  const fetchScorecardStats = async (id: string, inn: number) => {
+    try {
+      setScorecardLoading(true);
+      const { data: res, error } = await supabase.rpc('get_innings_stats', {
+        p_match_id: id,
+        p_innings: inn
+      });
+      if (error) throw error;
+      setScorecardData(res);
+    } catch (e) {
+      console.error('Scorecard stats error:', e);
+    } finally {
+      setScorecardLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'Scorecard' && matchId) {
+      fetchScorecardStats(matchId, scorecardInnings);
+    }
+  }, [activeTab, scorecardInnings, matchId]);
 
   useFocusEffect(useCallback(() => { fetchMatch(); }, []));
   
@@ -100,81 +125,18 @@ const MatchDetailScreen = () => {
     }
   };
 
-  const computeInningsScore = (innings: number) => {
-    const balls = (match?.ballLog || []).filter(b => b.innings === innings);
-    let runs = 0, wickets = 0, extras = 0, legalBalls = 0;
-    for (const b of balls) {
-      runs += b.runs + b.extras;
-      extras += b.extras;
-      if (b.is_wicket) wickets++;
-      if (!b.is_wide && !b.is_no_ball) legalBalls++;
-    }
-    const overs = Math.floor(legalBalls / 6);
-    const remainingBalls = legalBalls % 6;
-    return { runs, wickets, extras, legalBalls, oversStr: `${overs}.${remainingBalls}` };
+  const getInningsScoreStr = (inn: number) => {
+    if (inn === 1) return match?.score1 || '0/0 (0.0)';
+    return match?.score2 || '0/0 (0.0)';
   };
 
-  const buildScorecard = (innings: number) => {
-    const balls = (match?.ballLog || []).filter(b => b.innings === innings);
-    const batters: Record<string, BatterStats> = {};
-    const bowlers: Record<string, BowlerStats> = {};
-    const fow: FowStats[] = [];
-    
-    let currentRuns = 0;
-    let currentWickets = 0;
-    let currentLegalBalls = 0;
-  
-    balls.forEach(b => {
-      // Init Batter
-      if (!batters[b.batter]) batters[b.batter] = { name: b.batter, runs: 0, balls: 0, fours: 0, sixes: 0, outStr: 'not out' };
-      // Init Bowler
-      if (!bowlers[b.bowler]) bowlers[b.bowler] = { name: b.bowler, legalBalls: 0, runs: 0, wickets: 0, economy: '0.0' };
-      
-      // Process Batter
-      if (!b.isWide) batters[b.batter].balls += 1;
-      batters[b.batter].runs += b.runs;
-      if (b.runs === 4 && !b.isBye && !b.isLegBye) batters[b.batter].fours += 1;
-      if (b.runs === 6 && !b.isBye && !b.isLegBye) batters[b.batter].sixes += 1;
-      
-      // Process Bowler runs: only charge runs directly off the bat (not byes/leg-byes)
-      // plus wide/no-ball extras
-      const bowlerRunsFromBat = (b.isBye || b.isLegBye) ? 0 : b.runs;
-      const bowlerExtras = (b.isWide || b.isNoBall) ? b.extras : 0;
-      bowlers[b.bowler].runs += bowlerRunsFromBat + bowlerExtras;
-      if (!b.isWide && !b.isNoBall) {
-        bowlers[b.bowler].legalBalls += 1;
-        currentLegalBalls += 1;
-      }
-      
-      // Update Score
-      currentRuns += (b.runs + b.extras);
-  
-      // Wickets
-      if (b.isWicket) {
-        currentWickets += 1;
-        const dismissed = b.dismissedPlayer || b.batter;
-        if (!batters[dismissed]) batters[dismissed] = { name: dismissed, runs: 0, balls: 0, fours: 0, sixes: 0, outStr: 'not out' };
-        
-        let outStr = `b ${b.bowler}`;
-        if (b.wicketType === 'caught') outStr = `c & b ${b.bowler}`;
-        else if (b.wicketType === 'runout') outStr = `run out`;
-        batters[dismissed].outStr = outStr;
-        
-        if (b.wicketType !== 'runout' && b.wicketType !== 'retired') {
-          bowlers[b.bowler].wickets += 1;
-        }
-  
-        const overStr = `${Math.floor(currentLegalBalls / 6)}.${currentLegalBalls % 6}`;
-        fow.push({ score: currentRuns, wicketNum: currentWickets, overStr, player: dismissed });
-      }
-    });
-  
-    Object.values(bowlers).forEach(b => {
-      const ovs = b.legalBalls / 6;
-      b.economy = ovs > 0 ? (b.runs / ovs).toFixed(1) : '0.0';
-    });
-  
-    return { batters: Object.values(batters), bowlers: Object.values(bowlers), fow };
+  const getScorecardStats = () => {
+    if (!scorecardData) return { batters: [], bowlers: [], summary: null };
+    return {
+      batters: scorecardData.batting || [],
+      bowlers: scorecardData.bowling || [],
+      summary: scorecardData.summary
+    };
   };
 
   const handleStartToss = () => {
@@ -192,44 +154,19 @@ const MatchDetailScreen = () => {
   const battingFirst = match.tossDecision === 'Bat' ? match.tossWinner : (match.tossWinner === match.team1 ? match.team2 : match.team1);
   const battingSecond = battingFirst === match.team1 ? match.team2 : match.team1;
   
-  const inn1Score = computeInningsScore(1);
-  const inn2Score = computeInningsScore(2);
   const currentInningsName = scorecardInnings === 1 ? battingFirst : battingSecond;
-  
-  const { batters, bowlers, fow } = buildScorecard(scorecardInnings);
+  const { batters, bowlers, summary } = getScorecardStats();
 
   const renderInfoTab = () => {
-    const inn1 = buildScorecard(1);
-    const inn2 = buildScorecard(2);
-    const allBatters = [...inn1.batters, ...inn2.batters].sort((a, b) => b.runs - a.runs);
-    const allBowlers = [...inn1.bowlers, ...inn2.bowlers].sort((a, b) => b.wickets - a.wickets || a.runs - b.runs);
-    
-    const topBatter = allBatters[0];
-    const topBowler = allBowlers[0];
-
+    // For the Info tab, we'll just show match details and a button to view full summary
     return (
       <View style={s.tabContent}>
-        {/* Top Performers */}
-        {(topBatter || topBowler) && match.status !== 'Scheduled' && (
-          <View style={s.performersRow}>
-            {topBatter && (
-              <View style={[s.performerCard, { marginRight: 12 }]}>
-                <Ionicons name="medal" size={24} color="#F59E0B" />
-                <Text style={s.performerLabel}>Top Batter</Text>
-                <Text style={s.performerName} numberOfLines={1}>{topBatter.name}</Text>
-                <Text style={s.performerStats}>{topBatter.runs} ({topBatter.balls})</Text>
-              </View>
-            )}
-            {topBowler && (
-              <View style={s.performerCard}>
-                <Ionicons name="star" size={24} color="#3B82F6" />
-                <Text style={s.performerLabel}>Top Bowler</Text>
-                <Text style={s.performerName} numberOfLines={1}>{topBowler.name}</Text>
-                <Text style={s.performerStats}>{topBowler.wickets} Wkts, {topBowler.runs} R</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <TouchableOpacity 
+          style={[s.card, {backgroundColor: '#10B981', alignItems: 'center'}]}
+          onPress={() => navigation.navigate('MatchSummary', { matchId })}
+        >
+          <Text style={{color: '#FFF', fontWeight: '700'}}>View Full Match Summary & Stats</Text>
+        </TouchableOpacity>
 
         <View style={s.card}>
           <Text style={s.cardTitle}>Match Information</Text>
@@ -272,10 +209,10 @@ const MatchDetailScreen = () => {
       {/* Innings Toggle */}
       <View style={s.inningsToggleRow}>
         <TouchableOpacity style={[s.inningsTab, scorecardInnings === 1 && s.inningsTabActive]} onPress={() => setScorecardInnings(1)}>
-          <Text style={[s.inningsTabText, scorecardInnings === 1 && s.inningsTabTextActive]}>{battingFirst} ({inn1Score.runs}/{inn1Score.wickets})</Text>
+          <Text style={[s.inningsTabText, scorecardInnings === 1 && s.inningsTabTextActive]}>{battingFirst} ({getInningsScoreStr(1)})</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.inningsTab, scorecardInnings === 2 && s.inningsTabActive]} onPress={() => setScorecardInnings(2)}>
-          <Text style={[s.inningsTabText, scorecardInnings === 2 && s.inningsTabTextActive]}>{battingSecond} ({inn2Score.runs}/{inn2Score.wickets})</Text>
+          <Text style={[s.inningsTabText, scorecardInnings === 2 && s.inningsTabTextActive]}>{battingSecond} ({getInningsScoreStr(2)})</Text>
         </TouchableOpacity>
       </View>
 
@@ -292,14 +229,16 @@ const MatchDetailScreen = () => {
         {batters.map((b, i) => (
           <View key={i}>
             <View style={s.tableRow}>
-              <Text style={[s.colName, {fontWeight: '600'}]} numberOfLines={1}>{b.name}</Text>
+              <View style={s.colName}>
+                <Text style={{fontWeight: '600'}} numberOfLines={1}>{b.name}</Text>
+                <Text style={s.outStr}>{b.is_out ? (b.dismissal || 'out') : 'not out'}</Text>
+              </View>
               <Text style={[s.colNum, {fontWeight: '700'}]}>{b.runs}</Text>
               <Text style={s.colNum}>{b.balls}</Text>
               <Text style={s.colNum}>{b.fours}</Text>
               <Text style={s.colNum}>{b.sixes}</Text>
-              <Text style={[s.colNum, {flex: 1.5}]}>{b.balls > 0 ? ((b.runs / b.balls) * 100).toFixed(1) : '0.0'}</Text>
+              <Text style={[s.colNum, {flex: 1.5}]}>{b.strike_rate}</Text>
             </View>
-            <Text style={s.outStr}>{b.outStr}</Text>
           </View>
         ))}
         {batters.length === 0 && <Text style={s.emptyText}>No batting data yet.</Text>}
@@ -326,15 +265,13 @@ const MatchDetailScreen = () => {
         {bowlers.length === 0 && <Text style={s.emptyText}>No bowling data yet.</Text>}
       </View>
 
-      {/* Fall of Wickets */}
-      {fow.length > 0 && (
+      {/* Extras & Fall of Wickets in Summary */}
+      {summary && (
         <View style={s.card}>
-          <Text style={s.cardTitle}>Fall of Wickets</Text>
-          <View style={s.fowContainer}>
-            {fow.map((w, i) => (
-              <Text key={i} style={s.fowText}>{w.score}-{w.wicketNum} ({w.player}, {w.overStr})</Text>
-            ))}
-          </View>
+          <Text style={s.cardTitle}>Extras & Summary</Text>
+          <Text style={s.infoText}>
+            W: {summary.extras.wides} | NB: {summary.extras.no_balls} | B: {summary.extras.byes} | LB: {summary.extras.leg_byes}
+          </Text>
         </View>
       )}
     </View>

@@ -222,7 +222,8 @@ export default function ScoringScreen() {
       p_is_wicket: !!p.isW,
       p_wicket_type: p.wType,
       p_batter: striker,
-      p_bowler: bowler
+      p_bowler: bowler,
+      p_dismissed_player: p.dism
     });
 
     if (rpcError) {

@@ -14,6 +14,7 @@ import EmailSignupScreen from '../screens/EmailSignupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import MatchDetailScreen from '../screens/MatchDetailScreen';
+import MatchSummaryScreen from '../screens/MatchSummaryScreen';
 import ScoringScreen from '../screens/ScoringScreen';
 import { RootStackParamList, TabParamList, AuthStackParamList, AppStackParamList } from './navigation.types';
 
@@ -69,6 +70,7 @@ export const MainAppNavigator = () => (
     <AppStack.Screen name="Tabs" component={TabNavigator} />
     <AppStack.Screen name="CreateMatch" component={CreateMatchScreen} />
     <AppStack.Screen name="MatchDetail" component={MatchDetailScreen} />
+    <AppStack.Screen name="MatchSummary" component={MatchSummaryScreen} />
     <AppStack.Screen name="Scoring" component={ScoringScreen} />
     <AppStack.Screen name="EditProfile" component={EditProfileScreen} />
   </AppStack.Navigator>

@@ -27,6 +27,7 @@ export type AppStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
   CreateMatch: { matchId?: string } | undefined;
   MatchDetail: { matchId: string };
+  MatchSummary: { matchId: string };
   Scoring: { matchId: string };
   EditProfile: undefined;
 };
