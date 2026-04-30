@@ -210,14 +210,6 @@ export default function ScoringScreen() {
     const tempBall = { ...ball, id: 'temp-' + Date.now() };
     setBallLog(prev => [...prev, tempBall]);
 
-    // SERVER LOGIC: Compute score string for summary (matches table)
-    const previewLog = [...ballLog, ball];
-    const newInningsBalls = previewLog.filter(b => b && b.innings === currentInnings && !b.id?.toString().startsWith('edited_'));
-    const newRuns = newInningsBalls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
-    const newWickets = newInningsBalls.filter(b => b.isWicket).length;
-    const newLegal = newInningsBalls.filter(b => !b.isWide && !b.isNoBall).length;
-    const scoreStr = `${newRuns}/${newWickets} (${Math.floor(newLegal/6)}.${newLegal%6})`;
-
     // DATABASE CALL: Atomic update via RPC
     const { error: rpcError } = await supabase.rpc('add_ball', {
       p_match_id: matchId,
@@ -230,11 +222,14 @@ export default function ScoringScreen() {
       p_is_wicket: !!p.isW,
       p_wicket_type: p.wType,
       p_batter: striker,
-      p_bowler: bowler,
-      p_score_str: scoreStr
+      p_bowler: bowler
     });
 
-    if (rpcError) throw rpcError;
+    if (rpcError) {
+      // ROLLBACK: If DB fails, remove the temp ball and alert the user
+      setBallLog(prev => prev.filter(b => b.id !== tempBall.id));
+      throw rpcError;
+    }
 
     // Remove the temp ball (it will be replaced by the real one from Realtime)
     setBallLog(prev => prev.filter(b => b.id !== tempBall.id));
