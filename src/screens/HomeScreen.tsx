@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshC
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAllMatches } from '../services/matchService';
+import { supabase } from '../services/supabase';
 import { Match } from '../types';
 import Header from '../components/Header';
 import MatchCard from '../components/MatchCard';
@@ -20,6 +21,24 @@ const HomeScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       fetchMatches();
+      
+      // REALTIME: Listen for live score updates
+      const channel = supabase
+        .channel('live-matches')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', table: 'matches', filter: 'status=eq.Live' },
+          (payload) => {
+            console.log('Match update received:', payload.new);
+            // Update the match in the local state
+            setLiveMatches(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }, [])
   );
 

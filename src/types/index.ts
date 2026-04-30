@@ -60,21 +60,22 @@ export interface Match {
 
 export interface BallEvent {
   id: string;
+  match_id: string;
   innings: number;
   over: number;
   ball: number;
   batter: string;
   bowler: string;
   runs: number;
-  isWide: boolean;
-  isNoBall: boolean;
-  isBye: boolean;
-  isLegBye: boolean;
-  isWicket: boolean;
-  wicketType?: 'bowled' | 'caught' | 'lbw' | 'runout' | 'stumped' | 'hitwicket' | 'retired';
-  dismissedPlayer?: string;
+  is_wide: boolean;
+  is_no_ball: boolean;
+  is_bye: boolean;
+  is_leg_bye: boolean;
+  is_wicket: boolean;
+  wicket_type?: 'bowled' | 'caught' | 'lbw' | 'runout' | 'stumped' | 'hitwicket' | 'retired';
+  dismissed_player?: string;
   extras: number;
-  timestamp: number;
+  created_at: string;
 }
 
 export interface InningsData {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert as RNAlert, Modal, Share, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../services/supabase';
 import { getMatchById, updateMatch } from '../services/matchService';
 import { Match, BallEvent } from '../types';
 
@@ -59,6 +60,23 @@ export default function ScoringScreen() {
   useEffect(() => { 
     if (matchId) {
       loadMatch(); 
+      
+      // REALTIME: Subscribe to ball updates
+      const channel = supabase
+        .channel(`match-${matchId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', table: 'balls', filter: `match_id=eq.${matchId}` },
+          (payload) => {
+            console.log('New ball received via Realtime:', payload.new);
+            setBallLog(prev => [...prev, payload.new as BallEvent]);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     } else {
       setLoading(false);
       showAlert('Error', 'No Match ID provided');
@@ -78,8 +96,8 @@ export default function ScoringScreen() {
   useEffect(() => {
     const out = new Set<string>();
     ballLog.forEach(b => {
-      if (b.innings === currentInnings && b.isWicket && b.dismissedPlayer && !b.id?.startsWith('edited_')) {
-        out.add(b.dismissedPlayer);
+      if (b.innings === currentInnings && b.is_wicket && b.dismissed_player && !b.id?.toString().startsWith('temp-')) {
+        out.add(b.dismissed_player);
       }
     });
     setOutPlayers(Array.from(out));
@@ -91,10 +109,20 @@ export default function ScoringScreen() {
       const data = await getMatchById(matchId);
       if (data) {
         setMatch(data);
-        setBallLog(data.ballLog || []);
         setCurrentInnings(data.currentInnings || 1);
         if (data.status === 'Completed') {
           setMatchOver(true);
+        }
+
+        // Fetch initial ball log from the new transactional table
+        const { data: balls, error } = await supabase
+          .from('balls')
+          .select('*')
+          .eq('match_id', matchId)
+          .order('created_at', { ascending: true });
+        
+        if (!error && balls) {
+          setBallLog(balls as BallEvent[]);
         }
       } else {
         showAlert('Error', 'Match not found');
@@ -108,10 +136,10 @@ export default function ScoringScreen() {
   };
 
   // Safe computed values with fallbacks
-  const inningsBalls = (ballLog || []).filter(b => b && b.innings === currentInnings && !b.id?.startsWith('edited_'));
-  const legalBalls = inningsBalls.filter(b => !b.isWide && !b.isNoBall);
+  const inningsBalls = (ballLog || []).filter(b => b && b.innings === currentInnings && !b.id?.toString().startsWith('temp-'));
+  const legalBalls = inningsBalls.filter(b => !b.is_wide && !b.is_no_ball);
   const totalRuns = inningsBalls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
-  const totalWickets = inningsBalls.filter(b => b.isWicket).length;
+  const totalWickets = inningsBalls.filter(b => b.is_wicket).length;
   const completedOvers = Math.floor(legalBalls.length / 6);
   const remainingBalls = legalBalls.length % 6;
   const maxOvers = match?.overs || 20;
@@ -124,7 +152,7 @@ export default function ScoringScreen() {
   const batPlayers = currentBatting === match?.team1 ? (match?.team1Players || []) : (match?.team2Players || []);
   const bowlPlayers = currentBowling === match?.team1 ? (match?.team1Players || []) : (match?.team2Players || []);
 
-  const inn1Runs = (ballLog || []).filter(b => b && b.innings === 1 && !b.id?.startsWith('edited_')).reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
+  const inn1Runs = (ballLog || []).filter(b => b && b.innings === 1 && !b.id?.toString().startsWith('temp-')).reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
 
   // Over History calculation — group balls into overs by legal ball count
   const overHistory: { over: number; runs: number; balls: BallEvent[] }[] = [];
@@ -137,7 +165,7 @@ export default function ScoringScreen() {
     for (const b of inningsBalls) {
       currentOverBalls.push(b);
       currentOverRuns += (b.runs || 0) + (b.extras || 0);
-      if (!b.isWide && !b.isNoBall) legalCount++;
+      if (!b.is_wide && !b.is_no_ball) legalCount++;
 
       if (legalCount === 6) {
         overHistory.push({ over: overNum, runs: currentOverRuns, balls: currentOverBalls });
@@ -172,23 +200,44 @@ export default function ScoringScreen() {
     if (p.isWd && match?.rules?.wideExtraRun) extras = 1;
     if (p.isNb && match?.rules?.noBallExtraRun) extras = 1;
 
-    const ball: BallEvent = {
-      id: Date.now().toString(), innings: currentInnings, over: completedOvers, ball: remainingBalls + 1,
-      batter: striker, bowler, runs: p.runs, isWide: !!p.isWd, isNoBall: !!p.isNb, isBye: !!p.isBye,
-      isLegBye: !!p.isLb, isWicket: !!p.isW, wicketType: p.wType as any, dismissedPlayer: p.dism, extras, timestamp: Date.now()
+    const ball: any = {
+      innings: currentInnings, over: completedOvers, ball: remainingBalls + 1,
+      batter: striker, bowler, runs: p.runs, is_wide: !!p.isWd, is_no_ball: !!p.isNb, is_bye: !!p.isBye,
+      is_leg_bye: !!p.isLb, is_wicket: !!p.isW, wicket_type: p.wType as any, dismissed_player: p.dism, extras
     };
-    const newLog = [...ballLog, ball];
-    setBallLog(newLog);
-    // Save ball log AND computed score to Firestore
-    const newInningsBalls = newLog.filter(b => b && b.innings === currentInnings && !b.id?.startsWith('edited_'));
+
+    // OPTIMISTIC UPDATE: Add to local state immediately for instant feedback
+    const tempBall = { ...ball, id: 'temp-' + Date.now() };
+    setBallLog(prev => [...prev, tempBall]);
+
+    // SERVER LOGIC: Compute score string for summary (matches table)
+    const previewLog = [...ballLog, ball];
+    const newInningsBalls = previewLog.filter(b => b && b.innings === currentInnings && !b.id?.toString().startsWith('edited_'));
     const newRuns = newInningsBalls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
     const newWickets = newInningsBalls.filter(b => b.isWicket).length;
     const newLegal = newInningsBalls.filter(b => !b.isWide && !b.isNoBall).length;
     const scoreStr = `${newRuns}/${newWickets} (${Math.floor(newLegal/6)}.${newLegal%6})`;
-    const scoreUpdate: any = { ballLog: newLog };
-    if (currentInnings === 1) scoreUpdate.score1 = scoreStr;
-    else scoreUpdate.score2 = scoreStr;
-    await updateMatch(matchId, scoreUpdate);
+
+    // DATABASE CALL: Atomic update via RPC
+    const { error: rpcError } = await supabase.rpc('add_ball', {
+      p_match_id: matchId,
+      p_innings: currentInnings,
+      p_over: completedOvers,
+      p_ball_num: remainingBalls + 1,
+      p_runs: p.runs,
+      p_extras: extras,
+      p_extra_type: p.isWd ? 'wide' : p.isNb ? 'noball' : p.isBye ? 'bye' : p.isLb ? 'legbye' : null,
+      p_is_wicket: !!p.isW,
+      p_wicket_type: p.wType,
+      p_batter: striker,
+      p_bowler: bowler,
+      p_score_str: scoreStr
+    });
+
+    if (rpcError) throw rpcError;
+
+    // Remove the temp ball (it will be replaced by the real one from Realtime)
+    setBallLog(prev => prev.filter(b => b.id !== tempBall.id));
 
     // Handle wicket — clear dismissed player and auto-prompt replacement
     if (p.isW && p.dism) {
@@ -223,7 +272,7 @@ export default function ScoringScreen() {
     }
     
     // Over complete - need to change bowler and rotate batters
-    const nl = newLog.filter(b=>b.innings===currentInnings && !b.id?.startsWith('edited_') && !b.isWide && !b.isNoBall).length;
+    const nl = newLog.filter(b=>b.innings===currentInnings && !b.id?.toString().startsWith('temp-') && !b.is_wide && !b.is_no_ball).length;
     const currentOver = Math.floor(nl / 6);
     
     if (nl > 0 && nl % 6 === 0) {
@@ -255,10 +304,10 @@ export default function ScoringScreen() {
   };
 
   const checkInningsEnd = async (log: BallEvent[]) => {
-    const b = log.filter(x=>x.innings===currentInnings && !x.id?.startsWith('edited_'));
+    const b = log.filter(x=>x.innings===currentInnings && !x.id?.toString().startsWith('temp-'));
     const r = b.reduce((s,x)=>s+x.runs+x.extras,0);
-    const w = b.filter(x=>x.isWicket).length;
-    const l = b.filter(x=>!x.isWide && !x.isNoBall).length;
+    const w = b.filter(x=>x.is_wicket).length;
+    const l = b.filter(x=>!x.is_wide && !x.is_no_ball).length;
 
     if (w >= (batPlayers?.length||11)-1 || Math.floor(l/6) >= maxOvers) {
       if (currentInnings === 1) {
@@ -327,8 +376,8 @@ export default function ScoringScreen() {
     showAlert('Drinks Break', 'Take a break! Resume scoring when ready.');
   };
 
-  const getBallBg = (b: BallEvent) => b.id?.startsWith('edited_') ? '#F3F4F6' : b.isWicket ? '#FEE2E2' : b.runs===6 ? '#EDE9FE' : b.runs===4 ? '#DBEAFE' : (b.isWide||b.isNoBall) ? '#FEF3C7' : '#D1FAE5';
-  const getBallLbl = (b: BallEvent) => b.isWicket?'W':b.isWide?`${b.runs}wd`:b.isNoBall?`${b.runs}nb`:b.isBye?`${b.runs}b`:b.isLegBye?`${b.runs}lb`:b.runs;
+  const getBallBg = (b: BallEvent) => b.id?.toString().startsWith('temp-') ? '#F3F4F6' : b.is_wicket ? '#FEE2E2' : b.runs===6 ? '#EDE9FE' : b.runs===4 ? '#DBEAFE' : (b.is_wide||b.is_no_ball) ? '#FEF3C7' : '#D1FAE5';
+  const getBallLbl = (b: BallEvent) => b.is_wicket?'W':b.is_wide?`${b.runs}wd`:b.is_no_ball?`${b.runs}nb`:b.is_bye?`${b.runs}b`:b.is_leg_bye?`${b.runs}lb`:b.runs;
 
   if (loading) return <View style={{flex:1, justifyContent:'center', alignItems:'center', backgroundColor: '#FFF'}}><ActivityIndicator size="large" color="#10B981" /><Text style={{marginTop: 12, color: '#6B7280', fontWeight: '500'}}>Loading Match...</Text></View>;
   

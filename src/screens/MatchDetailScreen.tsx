@@ -51,21 +51,40 @@ const MatchDetailScreen = () => {
 
   useFocusEffect(useCallback(() => { fetchMatch(); }, []));
   
-  // Auto-poll for live matches so spectators see real-time scores
+  // REALTIME: Subscribe to live updates
   useEffect(() => {
-    if (match?.status === 'Live') {
-      const interval = setInterval(async () => {
-        try {
-          const data = await getMatchById(matchId);
-          if (data) {
-            setMatch(data);
-            if (data.status === 'Completed') clearInterval(interval);
+    if (matchId) {
+      const channel = supabase
+        .channel(`match-detail-${matchId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', table: 'matches', filter: `id=eq.${matchId}` },
+          (payload) => {
+            console.log('Match summary updated via Realtime:', payload.new);
+            setMatch(prev => prev ? { ...prev, ...payload.new } : (payload.new as Match));
           }
-        } catch (e) { /* silent */ }
-      }, 10000); // Poll every 10 seconds
-      return () => clearInterval(interval);
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', table: 'balls', filter: `match_id=eq.${matchId}` },
+          (payload) => {
+            console.log('New ball received via Realtime:', payload.new);
+            setMatch(prev => {
+              if (!prev) return prev;
+              const currentLog = prev.ballLog || [];
+              // Prevent duplicates if Realtime fires multiple times
+              if (currentLog.some(b => b.id === payload.new.id)) return prev;
+              return { ...prev, ballLog: [...currentLog, payload.new as BallEvent] };
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [match?.status, matchId]);
+  }, [matchId]);
 
   const onRefresh = () => { setRefreshing(true); fetchMatch(); };
 
@@ -87,8 +106,8 @@ const MatchDetailScreen = () => {
     for (const b of balls) {
       runs += b.runs + b.extras;
       extras += b.extras;
-      if (b.isWicket) wickets++;
-      if (!b.isWide && !b.isNoBall) legalBalls++;
+      if (b.is_wicket) wickets++;
+      if (!b.is_wide && !b.is_no_ball) legalBalls++;
     }
     const overs = Math.floor(legalBalls / 6);
     const remainingBalls = legalBalls % 6;

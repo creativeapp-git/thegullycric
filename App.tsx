@@ -88,18 +88,8 @@ export default function App() {
       }
     });
 
-    const profileSub = DeviceEventEmitter.addListener('profileUpdated', async () => {
-      console.log('Profile updated event received in App.tsx');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        console.log('Re-checking profile for:', session.user.id);
-        await checkProfile(session.user.id);
-      }
-    });
-
     return () => {
       subscription.unsubscribe();
-      profileSub.remove();
     };
   }, []);
 
