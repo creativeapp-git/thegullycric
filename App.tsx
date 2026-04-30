@@ -102,8 +102,27 @@ export default function App() {
     );
   }
 
+  const linking = {
+    prefixes: [window.location.origin, 'gullycric://'],
+    config: {
+      screens: {
+        PublicMatch: 'match/:matchId',
+        App: {
+          screens: {
+            Tabs: {
+              screens: {
+                Home: 'home',
+                Leaderboard: 'leaderboard'
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <AppNavigator user={user} hasProfile={hasProfile} />
       <StatusBar style="auto" />
     </NavigationContainer>

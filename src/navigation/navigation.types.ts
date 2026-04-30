@@ -6,6 +6,7 @@ export type TabParamList = {
   Home: undefined;
   'My Space': undefined;
   Fixtures: undefined;
+  Leaderboard: undefined;
   Settings: undefined;
 };
 
@@ -14,6 +15,7 @@ export type RootStackParamList = {
   Auth: undefined;
   App: undefined;
   ProfileSetup: { uid: string };
+  PublicMatch: { matchId: string };
 };
 
 // Auth stack screens

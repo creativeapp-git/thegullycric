@@ -118,8 +118,15 @@ const MatchDetailScreen = () => {
   const handleShare = async () => {
     if (!match) return;
     try {
-      const message = `🏏 Watch ${match.team1} vs ${match.team2} on GullyCric!\nMatch ID: ${match.matchId}\nFormat: ${match.type} • ${match.overs} Overs`;
-      await Share.share({ message });
+      const url = `${window.location.origin}/match/${match.matchId}`;
+      const message = `🏏 Watch ${match.team1} vs ${match.team2} live on GullyCric!\n\nScore: ${match.score1 || '0/0'}\n\nView here: ${url}`;
+      
+      if (Platform.OS === 'web') {
+        await navigator.clipboard.writeText(url);
+        window.alert('Match link copied to clipboard!');
+      } else {
+        await Share.share({ message });
+      }
     } catch (error) {
       console.log('Share error:', error);
     }
