@@ -1,55 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Platform } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { getAllMatches } from '../services/matchService';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../services/supabase';
+import { getAllMatches } from '../services/matchService';
 import { Match } from '../types';
 import Header from '../components/Header';
 import MatchCard from '../components/MatchCard';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { COLORS, SPACING, SHADOWS, BORDER_RADIUS } from '../theme';
 
 const HomeScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
-  const [liveMatches, setLiveMatches] = useState<Match[]>([]);
-  const [completedMatches, setCompletedMatches] = useState<Match[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchMatches();
-      
-      // REALTIME: Listen for live score updates
-      const channel = supabase
-        .channel('live-matches')
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', table: 'matches', filter: 'status=eq.Live' },
-          (payload) => {
-            console.log('Match update received:', payload.new);
-            // Update the match in the local state
-            setLiveMatches(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, [])
-  );
 
   const fetchMatches = async () => {
     try {
       setLoading(true);
-      const all = await getAllMatches();
-      // Exclude deleted
-      const activeMatches = all.filter(m => !m.isDeleted);
-      setLiveMatches(activeMatches.filter(m => m.status === 'Live'));
-      setCompletedMatches(activeMatches.filter(m => m.status === 'Completed'));
+      const data = await getAllMatches();
+      setMatches(data);
     } catch (error) {
       console.error('Error fetching matches:', error);
     } finally {
@@ -57,108 +28,102 @@ const HomeScreen = () => {
     }
   };
 
+  useEffect(() => {
+    fetchMatches();
+    
+    // Subscribe to REALTIME updates for the matches table
+    const channel = supabase
+      .channel('public:matches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        fetchMatches();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchMatches();
     setRefreshing(false);
   };
 
-  const filteredLive = searchQuery
-    ? liveMatches.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.matchId.includes(searchQuery))
-    : liveMatches;
-  const filteredCompleted = searchQuery
-    ? completedMatches.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.matchId.includes(searchQuery))
-    : completedMatches;
+  const liveMatches = matches.filter(m => m.status === 'Live');
+  const upcomingMatches = matches.filter(m => m.status === 'Scheduled');
+  const completedMatches = matches.filter(m => m.status === 'Completed');
 
-  const data = [
-    ...(filteredLive.length > 0 ? [{ type: 'header', title: 'Live Matches' }, ...filteredLive] : []),
-    ...(filteredCompleted.length > 0 ? [{ type: 'header', title: 'Completed Matches' }, ...filteredCompleted] : []),
-  ];
-
-  const renderItem = ({ item }: { item: any }) => {
-    if (item.type === 'header') {
-      return (
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            {item.title === 'Live Matches' && <View style={styles.liveIndicator} />}
-            <Text style={styles.sectionTitle}>{item.title}</Text>
-          </View>
-        </View>
-      );
-    }
+  const renderSection = (title: string, data: Match[]) => {
+    if (data.length === 0) return null;
     return (
-      <MatchCard
-        match={item}
-        onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })}
-      />
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={styles.sectionCount}>{data.length}</Text>
+        </View>
+        {data.map((match) => (
+          <MatchCard 
+            key={match.id || match.matchId} 
+            match={match} 
+            onPress={() => navigation.navigate('MatchDetail', { matchId: match.id || match.matchId })}
+          />
+        ))}
+      </View>
     );
   };
 
   return (
     <View style={styles.container}>
       <Header />
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by ID or Name"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#9CA3AF"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#D1D5DB" />
-            </TouchableOpacity>
-          )}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>Gully Cricket, <Text style={{color: COLORS.primary}}>Live.</Text></Text>
+          <Text style={styles.heroSub}>Track your local matches like a pro.</Text>
         </View>
-      </View>
 
-      <View style={styles.listContainer}>
         {loading && !refreshing ? (
-          <View style={{ paddingHorizontal: 20 }}><SkeletonMatchList count={3} /></View>
+          <View style={{ paddingHorizontal: SPACING.md }}><SkeletonMatchList count={3} /></View>
         ) : (
-          <FlatList
-            data={data}
-            keyExtractor={(item: any, index) => ('id' in item && item.id) ? item.id : `item-${index}`}
-            renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
-            ListEmptyComponent={
+          <>
+            {renderSection('Live Now', liveMatches)}
+            {renderSection('Upcoming', upcomingMatches)}
+            {renderSection('Completed', completedMatches)}
+            
+            {matches.length === 0 && (
               <View style={styles.emptyContainer}>
-                <Ionicons name="analytics-outline" size={64} color="#D1D5DB" />
-                <Text style={styles.emptyTitle}>No Matches Found</Text>
-                <Text style={styles.emptySubtitle}>
-                  {searchQuery ? "Try a different search term" : "There are no live or completed matches right now."}
-                </Text>
+                <Text style={{fontSize: 48}}>🏏</Text>
+                <Text style={styles.emptyText}>No matches found</Text>
+                <TouchableOpacity style={styles.createBtn} onPress={() => navigation.navigate('CreateMatch')}>
+                  <Text style={styles.createBtnText}>Host First Match</Text>
+                </TouchableOpacity>
               </View>
-            }
-          />
+            )}
+          </>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  searchContainer: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', zIndex: 10 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, height: 44 },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: '#111827', height: '100%' },
-  listContainer: { flex: 1 },
-  listContent: { padding: 20, paddingBottom: 100 },
-  sectionHeader: { marginBottom: 12, marginTop: 8 },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  liveIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 8 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginTop: 16 },
-  emptySubtitle: { fontSize: 14, color: '#6B7280', marginTop: 8, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { paddingBottom: 100 },
+  hero: { padding: SPACING.lg, paddingBottom: SPACING.md },
+  heroTitle: { fontSize: 28, fontWeight: '900', color: COLORS.text, lineHeight: 34 },
+  heroSub: { fontSize: 15, color: COLORS.textSecondary, marginTop: 4, fontWeight: '500' },
+  section: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  sectionCount: { fontSize: 12, fontWeight: '700', color: COLORS.primary, backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, paddingHorizontal: 40 },
+  emptyText: { fontSize: 16, fontWeight: '700', color: COLORS.textSecondary, marginTop: 16, marginBottom: 24 },
+  createBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: BORDER_RADIUS.lg, ...SHADOWS.medium },
+  createBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
 });
 
 export default HomeScreen;

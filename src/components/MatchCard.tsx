@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Match } from '../types';
+import { COLORS, BORDER_RADIUS, SHADOWS, SPACING } from '../theme';
 
 interface MatchCardProps {
   match: Match;
@@ -9,223 +10,162 @@ interface MatchCardProps {
 }
 
 const MatchCard: React.FC<MatchCardProps> = ({ match, onPress }) => {
-  // Compute scores from ballLog if score1/score2 string fields are not populated
-  let displayScore1 = match.score1;
-  let displayScore2 = match.score2;
-
-  if (!displayScore1 && match.ballLog && match.ballLog.length > 0) {
-    const inn1Balls = match.ballLog.filter(b => b.innings === 1 && !b.id?.startsWith('edited_'));
-    if (inn1Balls.length > 0) {
-      const runs1 = inn1Balls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
-      const wickets1 = inn1Balls.filter(b => b.isWicket).length;
-      const legal1 = inn1Balls.filter(b => !b.isWide && !b.isNoBall).length;
-      displayScore1 = `${runs1}/${wickets1} (${Math.floor(legal1 / 6)}.${legal1 % 6})`;
-    }
-  }
-  if (!displayScore2 && match.ballLog && match.ballLog.length > 0) {
-    const inn2Balls = match.ballLog.filter(b => b.innings === 2 && !b.id?.startsWith('edited_'));
-    if (inn2Balls.length > 0) {
-      const runs2 = inn2Balls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
-      const wickets2 = inn2Balls.filter(b => b.isWicket).length;
-      const legal2 = inn2Balls.filter(b => !b.isWide && !b.isNoBall).length;
-      displayScore2 = `${runs2}/${wickets2} (${Math.floor(legal2 / 6)}.${legal2 % 6})`;
-    }
-  }
-
-  // Try to determine the winner if completed
-  let resultText = '';
-  if (match.status === 'Completed') {
-    const s1Str = displayScore1 || match.score1;
-    const s2Str = displayScore2 || match.score2;
-    if (s1Str && s2Str) {
-      const s1 = parseInt(s1Str.split('/')[0]) || 0;
-      const s2 = parseInt(s2Str.split('/')[0]) || 0;
-      const w2 = parseInt(s2Str.split('/')[1]) || 0;
-      const teamSize = Math.max(match.team2Players?.length || 11, 2);
-
-      if (s1 > s2) {
-        resultText = `${match.team1} won by ${s1 - s2} runs`;
-      } else if (s2 > s1) {
-        const wicketsLeft = (teamSize - 1) - w2;
-        resultText = `${match.team2} won by ${Math.max(wicketsLeft, 0)} wickets`;
-      } else {
-        resultText = 'Match Tied';
-      }
-    } else {
-      resultText = 'Match Completed';
-    }
-  } else if (match.status === 'Live') {
-    resultText = 'Ongoing';
-  }
-
-  const renderTeamRow = (teamName: string, logo: string | undefined, score: string | undefined, isTeam1: boolean) => {
-    return (
-      <View style={s.teamRow}>
-        <View style={[s.teamLogo, { backgroundColor: '#F3F4F6' }]}>
-          {logo ? (
-            <Text style={{fontSize: 16}}>{logo}</Text>
-          ) : (
-            <Ionicons name="shield" size={16} color={isTeam1 ? '#EF4444' : '#3B82F6'} />
-          )}
-        </View>
-        <Text style={s.teamName} numberOfLines={1}>{teamName}</Text>
-        {(match.status === 'Live' || match.status === 'Completed') && score ? (
-          <Text style={s.scoreText}>{score}</Text>
-        ) : null}
-      </View>
-    );
-  };
-
+  const isLive = match.status === 'Live';
+  
   return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.8}>
-      {/* Top Bar */}
-      <View style={s.topBar}>
-        <Text style={s.metaText} numberOfLines={1}>
-          {match.type} • {match.location} • ID: {match.matchId}
-        </Text>
-        <Ionicons name="notifications-outline" size={16} color="#9CA3AF" />
+    <TouchableOpacity 
+      style={styles.card} 
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.header}>
+        <View style={styles.badgeContainer}>
+          {isLive ? (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          ) : (
+            <Text style={styles.statusText}>{match.status}</Text>
+          )}
+        </View>
+        <Text style={styles.formatText}>{match.type} • {match.overs} Ov</Text>
       </View>
 
-      <View style={s.mainRow}>
-        {/* Teams & Scores */}
-        <View style={s.teamsCol}>
-          {renderTeamRow(match.team1, match.team1Logo, displayScore1, true)}
-          <View style={{ height: 12 }} />
-          {renderTeamRow(match.team2, match.team2Logo, displayScore2, false)}
+      <View style={styles.teamsRow}>
+        <View style={styles.teamSection}>
+          <Text style={styles.teamLogo}>{match.team1Logo || '🏏'}</Text>
+          <Text style={styles.teamName} numberOfLines={1}>{match.team1}</Text>
+          <Text style={styles.scoreText}>{match.score1 || '0/0 (0.0)'}</Text>
         </View>
 
-        {/* Status / Result */}
-        <View style={s.statusCol}>
-          {match.status === 'Scheduled' && (
-            <>
-              <Text style={s.statusLabel}>Upcoming</Text>
-              <Text style={s.timeText}>{match.time}</Text>
-            </>
-          )}
-          
-          {match.status === 'Live' && (
-            <View style={s.liveBadge}>
-              <View style={s.liveDot} />
-              <Text style={s.liveText}>LIVE</Text>
-            </View>
-          )}
+        <View style={styles.vsContainer}>
+          <Text style={styles.vsText}>VS</Text>
+        </View>
 
-          {match.status === 'Completed' && (
-            <Text style={s.resultText}>{resultText}</Text>
-          )}
+        <View style={styles.teamSection}>
+          <Text style={styles.teamLogo}>{match.team2Logo || '🏏'}</Text>
+          <Text style={styles.teamName} numberOfLines={1}>{match.team2}</Text>
+          <Text style={styles.scoreText}>{match.score2 || '0/0 (0.0)'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.footer}>
+        <View style={styles.infoItem}>
+          <Ionicons name="location-outline" size={12} color={COLORS.textSecondary} />
+          <Text style={styles.infoText}>{match.location}</Text>
+        </View>
+        <View style={styles.infoItem}>
+          <Ionicons name="calendar-outline" size={12} color={COLORS.textSecondary} />
+          <Text style={styles.infoText}>{match.date}</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 };
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    ...SHADOWS.soft,
     borderWidth: 1,
-    borderColor: '#F3F4F6'
+    borderColor: COLORS.border,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    paddingBottom: 12,
-    marginBottom: 12
+    marginBottom: SPACING.md,
   },
-  metaText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-    flex: 1,
-    paddingRight: 8
-  },
-  mainRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  teamsCol: {
-    flex: 2,
-  },
-  teamRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  teamLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10
-  },
-  teamName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  scoreText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-    marginLeft: 8
-  },
-  statusCol: {
-    flex: 1,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: '#F3F4F6',
-    paddingLeft: 12
-  },
-  statusLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    marginBottom: 4,
-    textTransform: 'uppercase'
-  },
-  timeText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827'
+  badgeContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.white,
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF2F2',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#EF4444',
-    marginRight: 6
+    backgroundColor: COLORS.danger,
+    marginRight: 4,
   },
   liveText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#EF4444'
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.danger,
   },
-  resultText: {
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  formatText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  teamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  teamSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  teamLogo: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  teamName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#8B5CF6',
-    textAlign: 'right'
-  }
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  scoreText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  vsContainer: {
+    paddingHorizontal: 12,
+  },
+  vsText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.border,
+  },
+  footer: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.sm,
+    gap: 12,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
 });
 
 export default MatchCard;

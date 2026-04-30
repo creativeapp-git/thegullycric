@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Alert, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, Alert, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
@@ -9,6 +9,7 @@ import Header from '../components/Header';
 import MatchCard from '../components/MatchCard';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../theme';
 
 interface UserStats {
   total_matches: number;
@@ -34,31 +35,22 @@ const MySpaceScreen = () => {
 
       const uid = session.user.id;
 
-      // 1. Fetch Profile Info
       const { data: profile } = await supabase.from('users').select('*').eq('id', uid).single();
       setUser(profile);
 
-      // 2. Fetch Stats via RPC
-      const { data: statsData, error: statsError } = await supabase.rpc('get_user_stats', {
-        p_user_id: uid
-      });
-      if (!statsError) setStats(statsData);
+      const { data: statsData } = await supabase.rpc('get_user_stats', { p_user_id: uid });
+      setStats(statsData);
 
-      // 3. Fetch Matches
       const matches = await getUserMatches(uid);
       setUserMatches(matches.filter(m => !m.isDeleted));
     } catch (error) {
-      console.error('Error fetching profile data:', error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { fetchData(); }, []));
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -66,77 +58,51 @@ const MySpaceScreen = () => {
     setRefreshing(false);
   };
 
-  const handleDelete = (matchId: string) => {
-    const confirmDelete = () => {
-      deleteMatch(matchId).then(() => {
-        fetchData();
-      }).catch(e => {
-        if (Platform.OS === 'web') window.alert('Failed to delete');
-      });
-    };
-
-    if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to delete this match?')) confirmDelete();
-    } else {
-      Alert.alert('Delete Match', 'Are you sure?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: confirmDelete }
-      ]);
-    }
-  };
-
   const renderHeader = () => (
-    <View style={styles.profileHeader}>
-      <View style={styles.profileInfo}>
-        {user?.avatar ? (
-          <Image source={{ uri: user.avatar }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={{fontSize: 32}}>👤</Text>
-          </View>
-        )}
-        <View style={styles.nameSection}>
-          <Text style={styles.userName}>{user?.name || user?.username || 'Gully Cricketer'}</Text>
-          <Text style={styles.userHandle}>@{user?.username || 'cricketer'}</Text>
+    <View style={styles.headerSection}>
+      <View style={styles.profileBox}>
+        <View style={styles.avatarContainer}>
+          {user?.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}><Text style={{fontSize: 32}}>👤</Text></View>
+          )}
+          <TouchableOpacity style={styles.editBadge} onPress={() => navigation.navigate('EditProfile')}>
+            <Ionicons name="pencil" size={12} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('EditProfile')} style={styles.editBtn}>
-          <Ionicons name="settings-outline" size={20} color="#6B7280" />
-        </TouchableOpacity>
+        <Text style={styles.userName}>{user?.name || user?.username || 'Player'}</Text>
+        <Text style={styles.userHandle}>@{user?.username || 'cricketer'}</Text>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
+      <View style={styles.statsGrid}>
+        <View style={styles.statCard}>
           <Text style={styles.statValue}>{stats?.total_matches || 0}</Text>
           <Text style={styles.statLabel}>Matches</Text>
         </View>
-        <View style={[styles.statItem, styles.statDivider]}>
-          <Text style={styles.statValue}>{stats?.total_runs || 0}</Text>
-          <Text style={styles.statLabel}>Runs</Text>
+        <View style={[styles.statCard, {backgroundColor: COLORS.primaryLight}]}>
+          <Text style={[styles.statValue, {color: COLORS.primary}]}>{stats?.total_runs || 0}</Text>
+          <Text style={styles.statLabel}>Total Runs</Text>
         </View>
-        <View style={styles.statItem}>
+        <View style={styles.statCard}>
           <Text style={styles.statValue}>{stats?.total_wickets || 0}</Text>
           <Text style={styles.statLabel}>Wickets</Text>
         </View>
       </View>
 
-      <TouchableOpacity style={styles.createButton} onPress={() => navigation.navigate('CreateMatch')}>
-        <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-        <Text style={styles.createButtonText}>Host New Match</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>Your Matches</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>My Matches</Text>
+        <TouchableOpacity style={styles.addMatchBtn} onPress={() => navigation.navigate('CreateMatch')}>
+          <Ionicons name="add" size={20} color={COLORS.primary} />
+          <Text style={styles.addMatchText}>New</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   const renderMatch = ({ item }: { item: Match }) => (
     <View style={{ marginBottom: 12 }}>
-      <MatchCard
-        match={item}
-        onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })}
-      />
-      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id || item.matchId)}>
-        <Ionicons name="trash-outline" size={16} color="#EF4444" />
-      </TouchableOpacity>
+      <MatchCard match={item} onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })} />
     </View>
   );
 
@@ -148,41 +114,33 @@ const MySpaceScreen = () => {
         renderItem={renderMatch}
         ListHeaderComponent={renderHeader}
         keyExtractor={(item) => item.id || item.matchId}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
-        contentContainerStyle={styles.listContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={!loading ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No matches hosted yet</Text>
-          </View>
-        ) : null}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  profileHeader: { padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', marginBottom: 12 },
-  profileInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  avatar: { width: 72, height: 72, borderRadius: 36 },
-  avatarPlaceholder: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  nameSection: { flex: 1, marginLeft: 16 },
-  userName: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  userHandle: { fontSize: 14, color: '#6B7280', marginTop: 2 },
-  editBtn: { padding: 8, backgroundColor: '#F9FAFB', borderRadius: 12 },
-  statsRow: { flexDirection: 'row', backgroundColor: '#F9FAFB', borderRadius: 20, padding: 20, marginBottom: 20 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statDivider: { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E5E7EB' },
-  statValue: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  statLabel: { fontSize: 12, color: '#6B7280', marginTop: 4, fontWeight: '600' },
-  createButton: { backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, marginBottom: 20 },
-  createButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 8 },
-  listContainer: { paddingBottom: 100 },
-  deleteBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  emptyContainer: { alignItems: 'center', paddingTop: 40 },
-  emptyText: { color: '#9CA3AF', fontStyle: 'italic' },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  headerSection: { padding: SPACING.lg, alignItems: 'center' },
+  profileBox: { alignItems: 'center', marginBottom: SPACING.xl },
+  avatarContainer: { position: 'relative', marginBottom: SPACING.md },
+  avatar: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: COLORS.primaryLight },
+  avatarPlaceholder: { width: 90, height: 90, borderRadius: 45, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: COLORS.white },
+  userName: { fontSize: 22, fontWeight: '900', color: COLORS.text },
+  userHandle: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500', marginTop: 2 },
+  statsGrid: { flexDirection: 'row', gap: 12, marginBottom: SPACING.xl },
+  statCard: { flex: 1, backgroundColor: COLORS.card, padding: 16, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', ...SHADOWS.soft },
+  statValue: { fontSize: 20, fontWeight: '900', color: COLORS.text },
+  statLabel: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '700', marginTop: 4, textTransform: 'uppercase' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: SPACING.md },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  addMatchBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  addMatchText: { color: COLORS.primary, fontWeight: '700', fontSize: 13, marginLeft: 4 },
+  list: { paddingBottom: 100 },
 });
 
 export default MySpaceScreen;

@@ -1,91 +1,72 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../services/supabase';
-import { getUserProfile } from '../services/userService';
-import { AppNavigationProp } from '../navigation/navigation.types';
+import React from 'react';
+import { View, Text, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SPACING } from '../theme';
 
-const Header: React.FC = () => {
-  const [username, setUsername] = useState('Player');
-  const [avatar, setAvatar] = useState('');
-  const navigation = useNavigation<AppNavigationProp>();
-
-  useEffect(() => {
-    const loadProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const profile = await getUserProfile(session.user.id);
-        if (profile) {
-          if (profile.username) setUsername(profile.username);
-          if (profile.avatar) setAvatar(profile.avatar);
-        }
-      }
-    };
-    loadProfile();
-  }, []);
-
+const Header = () => {
   return (
-    <View style={styles.header}>
-      <Image
-        source={require('../../assets/app-logo.png')}
-        style={styles.logo}
-        resizeMode="cover"
-      />
-      <View style={styles.greetingContainer}>
-        <Text style={styles.greetingText}>Hey there, {username} <Text style={{fontSize: 18}}>👋</Text></Text>
-      </View>
-      <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Settings' })}>
-        <View style={styles.avatarCircle}>
-          {avatar ? (
-            <Text style={{fontSize: 20}}>{avatar}</Text>
-          ) : (
-            <Text style={styles.avatarText}>{username.charAt(0).toUpperCase()}</Text>
-          )}
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <View style={styles.iconBg}>
+            <Ionicons name="trophy" size={20} color={COLORS.white} />
+          </View>
+          <Text style={styles.title}>Gully<Text style={styles.titleBold}>Cric</Text></Text>
         </View>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity style={styles.notifBtn}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 };
 
+import { TouchableOpacity } from 'react-native-gesture-handler';
+
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+  safeArea: {
+    backgroundColor: COLORS.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: COLORS.border,
   },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12, // Rounded corners square
-    backgroundColor: '#F3F4F6',
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    height: Platform.OS === 'ios' ? 44 : 56,
   },
-  greetingContainer: {
-    flex: 1,
-    marginLeft: 12,
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  greetingText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#10B981',
+  iconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  }
+  title: {
+    fontSize: 20,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  titleBold: {
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  notifBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default Header;
