@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-// VERSION 1.0.2 - PROFILE FIX
+// VERSION 1.0.3 - ROBUST PROFILE FETCH
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
@@ -51,10 +51,10 @@ export default function App() {
 
   useEffect(() => {
     const checkProfile = async (uid: string) => {
-      console.log('App[1.0.2]: Checking profile for UID:', uid);
+      console.log('App[1.0.3]: Checking profile for UID:', uid);
       try {
         const profile = await getUserProfile(uid);
-        console.log('App[1.0.2]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
+        console.log('App[1.0.3]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
         setHasProfile(!!(profile && profile.username));
       } catch (e) {
         console.error('App: checkProfile error:', e);
@@ -103,14 +103,16 @@ export default function App() {
     );
   }
 
-  const linking = {
-    prefixes: [window.location.origin, 'gullycric://'],
+  const linking: any = {
+    prefixes: [Platform.OS === 'web' ? window.location.origin : 'gullycric://', 'gullycric://'],
     config: {
       screens: {
         PublicMatch: 'match/:matchId',
         App: {
+          path: '',
           screens: {
             Tabs: {
+              path: '',
               screens: {
                 Home: 'home',
                 Leaderboard: 'leaderboard'

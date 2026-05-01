@@ -36,17 +36,18 @@ export const getUserProfile = async (uid: string) => {
       .from('users')
       .select('*')
       .eq('id', uid)
-      .single();
+      .limit(1);
     
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase[1.0.2] error in getUserProfile:', error.code, error.message);
+    if (error) {
+      console.error('Supabase[1.0.3] error in getUserProfile:', error.code, error.message);
       throw error;
     }
     
-    console.log('getUserProfile[1.0.2] result:', data ? 'Found' : 'Not Found');
-    return data;
+    const profile = data && data.length > 0 ? data[0] : null;
+    console.log('getUserProfile[1.0.3] result:', profile ? 'Found' : 'Not Found');
+    return profile;
   } catch (error: any) {
-    console.error('Error getting user profile caught[1.0.2]:', error);
+    console.error('Error getting user profile caught[1.0.3]:', error);
     return null;
   }
 };
