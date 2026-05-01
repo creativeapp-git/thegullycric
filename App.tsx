@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-// VERSION 1.0.5 - GLOBAL TIMEOUT
+// VERSION 1.0.6 - AUTH GATEKEEPER FIX
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
@@ -51,23 +51,24 @@ export default function App() {
 
   useEffect(() => {
     const checkProfile = async (uid: string) => {
-      console.log('App[1.0.5]: Checking profile for UID:', uid);
+      console.log('App[1.0.6]: Gating profile for UID:', uid);
       
-      // Safety timeout: don't hang for more than 10s
       const timeout = setTimeout(() => {
-        console.warn('App[1.0.5]: Profile check timed out. Bypassing...');
+        console.warn('App: Profile check timed out. Defaulting to Setup.');
         setHasProfile(false);
         setLoading(false);
-      }, 10000);
+      }, 8000);
 
       try {
         const profile = await getUserProfile(uid);
         clearTimeout(timeout);
-        console.log('App[1.0.5]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
-        setHasProfile(!!(profile && profile.username));
+        // GATE: User must have a username to enter the main app
+        const isProfileComplete = !!(profile && profile.username && profile.username.length >= 3);
+        console.log('App: Profile complete?', isProfileComplete);
+        setHasProfile(isProfileComplete);
       } catch (e) {
         clearTimeout(timeout);
-        console.error('App[1.0.5]: checkProfile error:', e);
+        console.error('App: Gatekeeper error:', e);
         setHasProfile(false);
       } finally {
         setLoading(false);
