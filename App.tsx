@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+// VERSION 1.0.2 - PROFILE FIX
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
@@ -50,13 +51,13 @@ export default function App() {
 
   useEffect(() => {
     const checkProfile = async (uid: string) => {
-      console.log('Checking profile for:', uid);
+      console.log('App[1.0.2]: Checking profile for UID:', uid);
       try {
         const profile = await getUserProfile(uid);
-        console.log('Profile found:', profile ? 'Yes' : 'No', profile?.username);
+        console.log('App[1.0.2]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
         setHasProfile(!!(profile && profile.username));
       } catch (e) {
-        console.error('checkProfile error:', e);
+        console.error('App: checkProfile error:', e);
         setHasProfile(false);
       } finally {
         setLoading(false);

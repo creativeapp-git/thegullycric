@@ -38,13 +38,15 @@ export const getUserProfile = async (uid: string) => {
       .eq('id', uid)
       .single();
     
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "Results contain 0 rows"
+    if (error && error.code !== 'PGRST116') {
+      console.error('Supabase[1.0.2] error in getUserProfile:', error.code, error.message);
       throw error;
     }
     
+    console.log('getUserProfile[1.0.2] result:', data ? 'Found' : 'Not Found');
     return data;
   } catch (error: any) {
-    console.error('Error getting user profile:', error);
+    console.error('Error getting user profile caught[1.0.2]:', error);
     return null;
   }
 };
