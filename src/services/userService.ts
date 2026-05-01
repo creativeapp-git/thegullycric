@@ -31,23 +31,35 @@ export const saveUserProfile = async (uid: string, data: Partial<UserProfile>) =
 };
 
 export const getUserProfile = async (uid: string) => {
+  console.log('getUserProfile[1.0.4] initiating for:', uid);
+  
   try {
-    const { data, error } = await supabase
+    // Safety timeout promise
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('TIMEOUT')), 5000)
+    );
+
+    const fetchPromise = supabase
       .from('users')
       .select('*')
       .eq('id', uid)
       .limit(1);
+
+    // Race the fetch against the timeout
+    const result: any = await Promise.race([fetchPromise, timeoutPromise]);
     
+    const { data, error } = result;
+
     if (error) {
-      console.error('Supabase[1.0.3] error in getUserProfile:', error.code, error.message);
+      console.error('Supabase[1.0.4] error in getUserProfile:', error.code, error.message);
       throw error;
     }
     
     const profile = data && data.length > 0 ? data[0] : null;
-    console.log('getUserProfile[1.0.3] result:', profile ? 'Found' : 'Not Found');
+    console.log('getUserProfile[1.0.4] result:', profile ? 'Found' : 'Not Found');
     return profile;
   } catch (error: any) {
-    console.error('Error getting user profile caught[1.0.3]:', error);
+    console.error('Error getting user profile caught[1.0.4]:', error.message === 'TIMEOUT' ? 'TIMEOUT REACHED' : error);
     return null;
   }
 };
