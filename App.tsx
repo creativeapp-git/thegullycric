@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-// VERSION 1.0.3 - ROBUST PROFILE FETCH
+// VERSION 1.0.4 - TIMEOUT ADDED
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
@@ -51,13 +51,23 @@ export default function App() {
 
   useEffect(() => {
     const checkProfile = async (uid: string) => {
-      console.log('App[1.0.3]: Checking profile for UID:', uid);
+      console.log('App[1.0.4]: Checking profile for UID:', uid);
+      
+      // Safety timeout: don't hang for more than 10s
+      const timeout = setTimeout(() => {
+        console.warn('App[1.0.4]: Profile check timed out. Bypassing...');
+        setHasProfile(false);
+        setLoading(false);
+      }, 10000);
+
       try {
         const profile = await getUserProfile(uid);
-        console.log('App[1.0.3]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
+        clearTimeout(timeout);
+        console.log('App[1.0.4]: Profile found result:', profile ? 'YES' : 'NO', 'Username:', profile?.username);
         setHasProfile(!!(profile && profile.username));
       } catch (e) {
-        console.error('App: checkProfile error:', e);
+        clearTimeout(timeout);
+        console.error('App[1.0.4]: checkProfile error:', e);
         setHasProfile(false);
       } finally {
         setLoading(false);
