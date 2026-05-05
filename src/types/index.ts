@@ -3,7 +3,6 @@ export interface User {
   username: string;
   name: string;
   email?: string;
-  phoneNumber?: string;
   avatar?: string;
   bio?: string;
   preferences: {
@@ -13,10 +12,6 @@ export interface User {
       noBallExtra: boolean;
     };
     enableAnimation: boolean;
-  };
-  profileEdits?: {
-    count: number;
-    month: string;
   };
   location?: {
     lat: number;
@@ -49,13 +44,15 @@ export interface Match {
   description?: string;
   isDeleted?: boolean;
   createdBy: string;
+  creator_team?: string;
   createdAt?: any;
   rules?: {
     wideExtraRun: boolean;
     noBallExtraRun: boolean;
     ballByBall: boolean;
+    allow_super_over?: boolean;
   };
-  ballLog?: BallEvent[];
+  allow_super_over?: boolean;
 }
 
 export interface BallEvent {

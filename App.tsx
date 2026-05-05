@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
-// VERSION 1.0.6 - AUTH GATEKEEPER FIX
+import React, { useEffect, useState, useCallback, createContext } from 'react';
+// VERSION 1.1.0 - STABILIZATION REFACTOR
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './src/services/supabase';
-import { DeviceEventEmitter, Platform, View, Text, ActivityIndicator } from 'react-native';
+import { Platform, View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { PWAProvider } from './src/context/PWAContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { getUserProfile } from './src/services/userService';
+
 
 if (Platform.OS === 'web') {
   const style = document.createElement('style');
@@ -44,68 +47,93 @@ if (Platform.OS === 'web') {
   }
 }
 
+// Global context so ProfileSetupScreen can trigger profile re-check
+import { ProfileRefreshContext } from './src/services/profileContext';
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
+  const [profileChecked, setProfileChecked] = useState<boolean>(false);
+  const [initError, setInitError] = useState<string | null>(null);
+
+  const checkProfile = useCallback(async (uid: string) => {
+    console.log('App[1.2.0]: Gating profile for UID:', uid);
+    setInitError(null);
+    
+    try {
+      const { data: profile, error } = await supabase.from('users').select('id, username, name').eq('id', uid).single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('App: No profile found. Sending to setup.');
+          setHasProfile(false);
+        } else {
+          setInitError(`Database Error: ${error.message} (Code: ${error.code})`);
+          console.error(`Supabase Error: ${error.message}`);
+        }
+      } else if (!profile || !profile.username || !profile.name) {
+        console.log('App: Profile incomplete. Sending to setup.');
+        setHasProfile(false);
+      } else {
+        console.log('App: Profile complete.', profile.username);
+        setHasProfile(true);
+      }
+    } catch (e: any) {
+      console.error('App: Gatekeeper exception:', e);
+      setInitError(`Network/Client Error: ${e.message}`);
+    } finally {
+      setProfileChecked(true);
+    }
+  }, []);
+
+  // Exposed via context so child screens can trigger a re-check
+  const refreshProfile = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await checkProfile(session.user.id);
+    }
+  }, [checkProfile]);
 
   useEffect(() => {
-    const checkProfile = async (uid: string) => {
-      console.log('App[1.0.6]: Gating profile for UID:', uid);
-      
-      const timeout = setTimeout(() => {
-        console.warn('App: Profile check timed out. Defaulting to Setup.');
-        setHasProfile(false);
-        setLoading(false);
-      }, 8000);
-
-      try {
-        const profile = await getUserProfile(uid);
-        clearTimeout(timeout);
-        // GATE: User must have a username to enter the main app
-        const isProfileComplete = !!(profile && profile.username && profile.username.length >= 3);
-        console.log('App: Profile complete?', isProfileComplete);
-        setHasProfile(isProfileComplete);
-      } catch (e) {
-        clearTimeout(timeout);
-        console.error('App: Gatekeeper error:', e);
-        setHasProfile(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Session retrieved:', session?.user?.id);
       setUser(session?.user ?? null);
       if (session?.user) {
         checkProfile(session.user.id);
       } else {
         setHasProfile(false);
-        setLoading(false);
+        setProfileChecked(true);
       }
-    }).catch(error => {
-      console.error('Session error:', error);
-      setLoading(false);
-    });
+    }).catch(() => setProfileChecked(true));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state changed:', session ? 'logged in' : 'logged out', session?.user?.id);
       setUser(session?.user ?? null);
-
       if (session?.user) {
+        setHasProfile(false);
+        setProfileChecked(false);
         await checkProfile(session.user.id);
       } else {
         setHasProfile(false);
+        setProfileChecked(true);
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    return () => subscription.unsubscribe();
+  }, [checkProfile]);
 
-  if (loading) {
+
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAFAFA', padding: 20 }}>
+        <Ionicons name="alert-circle" size={48} color="#EF4444" />
+        <Text style={{ marginTop: 16, color: '#EF4444', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>{initError}</Text>
+        <TouchableOpacity style={{ marginTop: 24, padding: 12, backgroundColor: '#10B981', borderRadius: 8 }} onPress={() => { setInitError(null); setProfileChecked(false); if(user) checkProfile(user.id); else supabase.auth.getSession(); }}>
+          <Text style={{ color: '#FFF', fontWeight: '700' }}>Retry Connection</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!profileChecked) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAFAFA' }}>
         <ActivityIndicator size="large" color="#10B981" />
@@ -136,9 +164,15 @@ export default function App() {
   };
 
   return (
-    <NavigationContainer linking={linking}>
-      <AppNavigator user={user} hasProfile={hasProfile} />
-      <StatusBar style="auto" />
-    </NavigationContainer>
+    <ProfileRefreshContext.Provider value={refreshProfile}>
+      <PWAProvider>
+        <NotificationProvider>
+          <NavigationContainer linking={linking} fallback={<ActivityIndicator size="large" />}>
+            <AppNavigator user={user} hasProfile={hasProfile} />
+            <StatusBar style="auto" />
+          </NavigationContainer>
+        </NotificationProvider>
+      </PWAProvider>
+    </ProfileRefreshContext.Provider>
   );
 }

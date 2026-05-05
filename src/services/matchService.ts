@@ -6,7 +6,7 @@ export const createMatch = async (match: Match) => {
     const { data, error } = await supabase
       .from('matches')
       .insert([{
-        matchId: match.matchId,
+        match_id: match.matchId,
         name: match.name,
         type: match.type,
         overs: match.overs,
@@ -15,15 +15,19 @@ export const createMatch = async (match: Match) => {
         time: match.time,
         team1: match.team1,
         team2: match.team2,
-        team1Logo: match.team1Logo,
-        team2Logo: match.team2Logo,
-        team1Players: match.team1Players,
-        team2Players: match.team2Players,
+        team1_logo: match.team1Logo,
+        team2_logo: match.team2Logo,
+        team1_players: match.team1Players,
+        team2_players: match.team2Players,
         status: match.status,
         description: match.description,
-        createdBy: match.createdBy,
+        created_by: match.createdBy,
         rules: match.rules,
-        ballLog: match.ballLog || []
+        toss_winner: match.tossWinner,
+        toss_decision: match.tossDecision,
+        current_innings: match.currentInnings ?? 1,
+        creator_team: match.creator_team,
+        allow_super_over: match.allow_super_over ?? false,
       }])
       .select()
       .single();
@@ -31,7 +35,6 @@ export const createMatch = async (match: Match) => {
     if (error) throw error;
     return data as Match;
   } catch (error: any) {
-    console.error('Error creating match:', error);
     throw error;
   }
 };
@@ -41,12 +44,11 @@ export const getAllMatches = async () => {
     const { data, error } = await supabase
       .from('matches')
       .select('*')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
-    console.error('Error fetching matches:', error);
     throw error;
   }
 };
@@ -57,12 +59,11 @@ export const getLiveMatches = async () => {
       .from('matches')
       .select('*')
       .eq('status', 'Live')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
-    console.error('Error fetching live matches:', error);
     throw error;
   }
 };
@@ -73,12 +74,11 @@ export const getFixtures = async () => {
       .from('matches')
       .select('*')
       .eq('status', 'Scheduled')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
-    console.error('Error fetching fixtures:', error);
     throw error;
   }
 };
@@ -88,13 +88,26 @@ export const getUserMatches = async (userId: string) => {
     const { data, error } = await supabase
       .from('matches')
       .select('*')
-      .eq('createdBy', userId)
-      .order('createdAt', { ascending: false });
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
-    console.error('Error fetching user matches:', error);
+    throw error;
+  }
+};
+
+export const getMatchByShortId = async (matchId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('match_id', matchId)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data as Match | null;
+  } catch (error: any) {
     throw error;
   }
 };
@@ -110,21 +123,41 @@ export const getMatchById = async (matchId: string) => {
     if (error && error.code !== 'PGRST116') throw error;
     return data as Match | null;
   } catch (error: any) {
-    console.error('Error fetching match:', error);
     throw error;
   }
 };
 
 export const updateMatch = async (matchId: string, updates: Partial<Match>) => {
   try {
+    const dbUpdates: any = { ...updates };
+    if ('matchId' in updates) dbUpdates.match_id = updates.matchId;
+    if ('team1Logo' in updates) dbUpdates.team1_logo = updates.team1Logo;
+    if ('team2Logo' in updates) dbUpdates.team2_logo = updates.team2Logo;
+    if ('team1Players' in updates) dbUpdates.team1_players = updates.team1Players;
+    if ('team2Players' in updates) dbUpdates.team2_players = updates.team2Players;
+    if ('createdBy' in updates) dbUpdates.created_by = updates.createdBy;
+    if ('tossWinner' in updates) dbUpdates.toss_winner = updates.tossWinner;
+    if ('tossDecision' in updates) dbUpdates.toss_decision = updates.tossDecision;
+    if ('currentInnings' in updates) dbUpdates.current_innings = updates.currentInnings;
+    
+    // clean up camelCase keys
+    delete dbUpdates.matchId;
+    delete dbUpdates.team1Logo;
+    delete dbUpdates.team2Logo;
+    delete dbUpdates.team1Players;
+    delete dbUpdates.team2Players;
+    delete dbUpdates.createdBy;
+    delete dbUpdates.tossWinner;
+    delete dbUpdates.tossDecision;
+    delete dbUpdates.currentInnings;
+
     const { error } = await supabase
       .from('matches')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', matchId);
 
     if (error) throw error;
   } catch (error: any) {
-    console.error('Error updating match:', error);
     throw error;
   }
 };
@@ -138,7 +171,6 @@ export const deleteMatch = async (matchId: string) => {
 
     if (error) throw error;
   } catch (error: any) {
-    console.error('Error deleting match:', error);
     throw error;
   }
 };

@@ -27,18 +27,16 @@ export const BORDER_RADIUS = {
 };
 
 export const SHADOWS = {
+  small: {
+    boxShadow: '0px 1px 6px rgba(0, 0, 0, 0.04)',
+    elevation: 1,
+  },
   soft: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
   medium: {
-    shadowColor: '#38BDF8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(56, 189, 248, 0.1)',
     elevation: 4,
   },
 };

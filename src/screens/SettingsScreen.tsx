@@ -7,11 +7,13 @@ import { supabase } from '../services/supabase';
 import { getUserProfile, saveUserProfile } from '../services/userService';
 import { User } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { usePWA } from '../context/PWAContext';
 
 const SUPPORT_EMAIL = 'creative.app.mail@gmail.com';
 
 const SettingsScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
+  const { isInstallable, promptInstall, isInstalled } = usePWA();
   const [profile, setProfile] = useState<User | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
@@ -134,6 +136,28 @@ const SettingsScreen = () => {
         <View style={styles.optionsCard}>
           {renderOption('notifications-outline', 'Notification Settings', () => setShowNotifications(true))}
         </View>
+
+        {isInstallable && !isInstalled && (
+          <View style={{ marginBottom: 24 }}>
+            <Text style={styles.sectionHeader}>App</Text>
+            <TouchableOpacity 
+              style={[styles.optionsCard, { borderColor: '#10B981', borderWidth: 2, backgroundColor: '#ECFDF5' }]} 
+              onPress={promptInstall}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={[styles.iconContainer, { backgroundColor: '#D1FAE5' }]}>
+                  <Ionicons name="download-outline" size={24} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { fontWeight: '800', color: '#065F46' }]}>Install App</Text>
+                  <Text style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>Install for faster access & full-screen experience</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#10B981" />
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <Text style={styles.sectionHeader}>Support & About</Text>
         <View style={styles.optionsCard}>

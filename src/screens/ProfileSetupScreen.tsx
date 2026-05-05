@@ -1,31 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, DeviceEventEmitter, useWindowDimensions, Image } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, useWindowDimensions, Image } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
-import { saveUserProfile, getUserProfile, isUsernameTaken, isPhoneNumberTaken } from '../services/userService';
+import { saveUserProfile, getUserProfile, isUsernameTaken } from '../services/userService';
 import { AppNavigationProp, ProfileSetupRouteProp } from '../navigation/navigation.types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../theme';
 import { Button, Card } from '../components/UI';
 import { Input } from '../components/Input';
+import { ProfileRefreshContext } from '../services/profileContext';
 
 const ProfileSetupScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
   const route = useRoute<ProfileSetupRouteProp>();
   const { uid } = route.params;
   const { height } = useWindowDimensions();
+  const refreshProfile = useContext(ProfileRefreshContext);
 
   const [username, setUsername] = useState('');
   const [originalUsername, setOriginalUsername] = useState('');
   const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
-  const [phoneAvailable, setPhoneAvailable] = useState<boolean | null>(null);
-  const [checkingPhone, setCheckingPhone] = useState(false);
 
   useEffect(() => {
     loadExistingProfile();
@@ -59,9 +60,12 @@ const ProfileSetupScreen = () => {
   };
 
   const handleSetup = async () => {
-    if (!username || username.length < 3) { Alert.alert('Error', 'Username too short'); return; }
-    if (!name.trim()) { Alert.alert('Error', 'Name required'); return; }
-    if (usernameAvailable === false) { Alert.alert('Error', 'Username taken'); return; }
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!username || username.length < 3) { setErrorMessage('Username must be at least 3 characters.'); return; }
+    if (!name.trim()) { setErrorMessage('Name is required.'); return; }
+    if (usernameAvailable === false) { setErrorMessage('Username is already taken.'); return; }
 
     setSaving(true);
     try {
@@ -69,17 +73,26 @@ const ProfileSetupScreen = () => {
       const profileData = {
         username: username.trim(),
         name: name.trim(),
-        phoneNumber: phoneNumber.trim(),
         email: session?.user?.email || '',
       };
 
       await saveUserProfile(uid, profileData);
-      DeviceEventEmitter.emit('profileUpdated');
       
-      if (Platform.OS === 'web') window.alert('Profile set up!');
-      else Alert.alert('Success', 'Profile set up!');
+      const verifyProfile = await getUserProfile(uid);
+
+
+      if (!verifyProfile || !verifyProfile.username || !verifyProfile.name) {
+        setErrorMessage('Profile verification failed. Please try saving again.');
+        return;
+      }
+
+      setSuccessMessage('Profile set up successfully!');
+      
+      // Trigger App.tsx to re-check profile — flips hasProfile to true,
+      // which causes the conditional navigator to switch to the main App stack automatically
+      await refreshProfile();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Setup failed');
+      setErrorMessage(error.message || 'Setup failed. Please try again.');
     } finally { setSaving(false); }
   };
 
@@ -95,6 +108,19 @@ const ProfileSetupScreen = () => {
         </View>
 
         <Card>
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+          {successMessage ? (
+            <View style={styles.successBox}>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+              <Text style={styles.successText}>{successMessage}</Text>
+            </View>
+          ) : null}
+
           <Input 
             label="Username" 
             value={username} 
@@ -110,14 +136,6 @@ const ProfileSetupScreen = () => {
             onChangeText={setName} 
             placeholder="John Doe" 
             icon="person-outline"
-          />
-          <Input 
-            label="Phone Number (Optional)" 
-            value={phoneNumber} 
-            onChangeText={setPhoneNumber} 
-            placeholder="9999999999" 
-            icon="call-outline"
-            keyboardType="phone-pad"
           />
 
           <Button 
@@ -140,6 +158,10 @@ const styles = StyleSheet.create({
   logo: { width: 80, height: 80, borderRadius: 20, marginBottom: 16 },
   title: { fontSize: 28, fontWeight: '900', color: COLORS.text },
   subtitle: { fontSize: 15, color: COLORS.textSecondary, marginTop: 4, textAlign: 'center' },
+  errorBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', padding: 12, borderRadius: 10, marginBottom: 16, gap: 8 },
+  errorText: { color: COLORS.danger, fontSize: 13, fontWeight: '600', flex: 1 },
+  successBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', padding: 12, borderRadius: 10, marginBottom: 16, gap: 8 },
+  successText: { color: COLORS.success, fontSize: 13, fontWeight: '600', flex: 1 },
 });
 
 export default ProfileSetupScreen;

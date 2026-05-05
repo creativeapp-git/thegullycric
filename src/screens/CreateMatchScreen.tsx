@@ -46,12 +46,14 @@ const CreateMatchScreen = () => {
   const [wideExtraRun, setWideExtraRun] = useState(true);
   const [noBallExtraRun, setNoBallExtraRun] = useState(true);
   const [ballByBall, setBallByBall] = useState(true);
+  const [allowSuperOver, setAllowSuperOver] = useState(false);
 
   // Phase 4: Review & Toss
   const [tossType, setTossType] = useState<'manual' | 'virtual'>('manual');
   const [tossWinner, setTossWinner] = useState<string>('');
   const [tossDecision, setTossDecision] = useState<'Bat' | 'Bowl'>('Bat');
   const [isFlipping, setIsFlipping] = useState(false);
+  const [creatorTeam, setCreatorTeam] = useState<string>('');
 
   useEffect(() => {
     fetchRecentPlayers();
@@ -84,6 +86,7 @@ const CreateMatchScreen = () => {
         setWideExtraRun(data.rules?.wideExtraRun ?? true);
         setNoBallExtraRun(data.rules?.noBallExtraRun ?? true);
         setBallByBall(data.rules?.ballByBall ?? true);
+        setAllowSuperOver(data.rules?.allow_super_over ?? false);
       }
     } catch (e) {
       console.error(e);
@@ -104,7 +107,7 @@ const CreateMatchScreen = () => {
       });
       setRecentPlayers(Array.from(players).slice(0, 15)); // top 15
     } catch (e) {
-      console.log('Failed to fetch past players', e);
+
     }
   };
 
@@ -126,8 +129,8 @@ const CreateMatchScreen = () => {
       }
     }
     if (step === 2) {
-      if (team1Players.length === 0 || team2Players.length === 0) {
-        showAlert('Error', 'Please add at least 1 player to each team.');
+      if (team1Players.length < 2 || team2Players.length < 2) {
+        showAlert('Error', 'Each team needs at least 2 players (1 batter + 1 non-striker).');
         return;
       }
     }
@@ -187,7 +190,7 @@ const CreateMatchScreen = () => {
         await updateMatch(existingMatchId, {
           name: matchName, type: matchType, overs: parseInt(overs) || 20, location,
           date: matchDate, time: matchTime, team1, team2, team1Logo, team2Logo,
-          team1Players, team2Players, rules: { wideExtraRun, noBallExtraRun, ballByBall },
+          team1Players, team2Players, rules: { wideExtraRun, noBallExtraRun, ballByBall, allow_super_over: allowSuperOver },
           ...(status === 'Live' ? { status: 'Live' as const, tossWinner, tossDecision } : {}),
         });
         return { id: existingMatchId };
@@ -212,8 +215,9 @@ const CreateMatchScreen = () => {
           currentInnings: 1,
           status,
           createdBy: session.user.id,
-          rules: { wideExtraRun, noBallExtraRun, ballByBall },
-          ballLog: [],
+          creator_team: creatorTeam || team1,
+          allow_super_over: allowSuperOver,
+          rules: { wideExtraRun, noBallExtraRun, ballByBall, allow_super_over: allowSuperOver }
         };
         const created = await createMatch(match);
         return created;
@@ -243,11 +247,15 @@ const CreateMatchScreen = () => {
       showAlert('Error', 'Please complete the toss before starting.');
       return;
     }
+    if (team1Players.length < 2 || team2Players.length < 2) {
+      showAlert('Error', 'Each team needs at least 2 players to start a live match.');
+      return;
+    }
     try {
       setLoading(true);
       const created = await saveMatch('Live');
       if (created && created.id) {
-        console.log('Match created, navigating to scoring:', created.id);
+
         navigation.replace('Scoring', { matchId: created.id });
       } else {
         showAlert('Error', 'Failed to initialize live match. Please check your internet and try again.');
@@ -473,6 +481,16 @@ const CreateMatchScreen = () => {
           </View>
           <Switch value={ballByBall} onValueChange={setBallByBall} trackColor={{ false: '#E5E7EB', true: '#D1FAE5' }} thumbColor={ballByBall ? '#10B981' : '#FFF'} />
         </View>
+
+        <View style={s.divider} />
+
+        <View style={s.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.switchLabel}>Allow Super Over</Text>
+            <Text style={s.switchSub}>Play a Super Over on Tie</Text>
+          </View>
+          <Switch value={allowSuperOver} onValueChange={setAllowSuperOver} trackColor={{ false: '#E5E7EB', true: '#D1FAE5' }} thumbColor={allowSuperOver ? '#10B981' : '#FFF'} />
+        </View>
       </View>
     </View>
   );
@@ -504,7 +522,7 @@ const CreateMatchScreen = () => {
                   ]
                 }
               ]}>
-                <MaterialCommunityIcons name={"coin" as any} size={60} color="#F59E0B" />
+                <Text style={{ fontSize: 60 }}>🪙</Text>
               </Animated.View>
             ) : tossWinner ? (
               <View style={s.tossResultBox}>
@@ -516,7 +534,7 @@ const CreateMatchScreen = () => {
               </View>
             ) : (
               <TouchableOpacity style={s.coinButton} onPress={handleVirtualToss}>
-                <MaterialCommunityIcons name={"coin" as any} size={48} color="#F59E0B" />
+                <Text style={{ fontSize: 48 }}>🪙</Text>
                 <Text style={s.coinText}>Tap to Flip Coin</Text>
               </TouchableOpacity>
             )}
@@ -546,6 +564,18 @@ const CreateMatchScreen = () => {
             </View>
           </View>
         ) : null}
+
+        <View style={{ marginTop: 24 }}>
+          <Text style={s.cardTitle}>Which team are you scoring for?</Text>
+          <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 10 }}>This is used for win/loss tracking in your profile.</Text>
+          <View style={s.chipRow}>
+            {[team1 || 'Team 1', team2 || 'Team 2'].map(t => (
+              <TouchableOpacity key={t} style={[s.tossBtn, creatorTeam === t && s.tossBtnActive]} onPress={() => setCreatorTeam(t)}>
+                <Text style={[s.tossBtnText, creatorTeam === t && s.tossBtnTextActive]}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
     </View>
   );

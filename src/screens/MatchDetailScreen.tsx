@@ -81,26 +81,13 @@ const MatchDetailScreen = () => {
     if (matchId) {
       const channel = supabase
         .channel(`match-detail-${matchId}`)
+        // @ts-ignore
         .on(
           'postgres_changes',
-          { event: 'UPDATE', table: 'matches', filter: `id=eq.${matchId}` },
-          (payload) => {
-            console.log('Match summary updated via Realtime:', payload.new);
+          { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
+          (payload: any) => {
+
             setMatch(prev => prev ? { ...prev, ...payload.new } : (payload.new as Match));
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', table: 'balls', filter: `match_id=eq.${matchId}` },
-          (payload) => {
-            console.log('New ball received via Realtime:', payload.new);
-            setMatch(prev => {
-              if (!prev) return prev;
-              const currentLog = prev.ballLog || [];
-              // Prevent duplicates if Realtime fires multiple times
-              if (currentLog.some(b => b.id === payload.new.id)) return prev;
-              return { ...prev, ballLog: [...currentLog, payload.new as BallEvent] };
-            });
           }
         )
         .subscribe();
@@ -128,7 +115,7 @@ const MatchDetailScreen = () => {
         await Share.share({ message });
       }
     } catch (error) {
-      console.log('Share error:', error);
+
     }
   };
 
@@ -233,7 +220,7 @@ const MatchDetailScreen = () => {
           <Text style={[s.colNum, s.colHeader]}>6s</Text>
           <Text style={[s.colNum, s.colHeader, {flex: 1.5}]}>SR</Text>
         </View>
-        {batters.map((b, i) => (
+        {batters.map((b: any, i: number) => (
           <View key={i}>
             <View style={s.tableRow}>
               <View style={s.colName}>
@@ -260,7 +247,7 @@ const MatchDetailScreen = () => {
           <Text style={[s.colNum, s.colHeader]}>W</Text>
           <Text style={[s.colNum, s.colHeader, {flex: 1.5}]}>Econ</Text>
         </View>
-        {bowlers.map((b, i) => (
+        {bowlers.map((b: any, i: number) => (
           <View key={i} style={s.tableRow}>
             <Text style={[s.colName, {fontWeight: '600'}]} numberOfLines={1}>{b.name}</Text>
             <Text style={s.colNum}>{Math.floor(b.legalBalls/6)}.{b.legalBalls%6}</Text>

@@ -18,6 +18,7 @@ import MatchDetailScreen from '../screens/MatchDetailScreen';
 import MatchSummaryScreen from '../screens/MatchSummaryScreen';
 import ScoringScreen from '../screens/ScoringScreen';
 import PublicMatchScreen from '../screens/PublicMatchScreen';
+import PublicUserProfileScreen from '../screens/PublicUserProfileScreen';
 import { RootStackParamList, TabParamList, AuthStackParamList, AppStackParamList } from './navigation.types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -97,6 +98,7 @@ const AppNavigator = ({ user, hasProfile }: AppNavigatorProps) => {
         <RootStack.Screen name="App" component={MainAppNavigator} />
       )}
       <RootStack.Screen name="PublicMatch" component={PublicMatchScreen} />
+      <RootStack.Screen name="PublicUserProfile" component={PublicUserProfileScreen} />
     </RootStack.Navigator>
   );
 };

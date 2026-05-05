@@ -50,18 +50,7 @@ const EditProfileScreen = () => {
           setOriginalUsername(userProfile.username || '');
           setAvatar(userProfile.avatar || '');
           
-          const currentMonth = new Date().toISOString().slice(0, 7);
-          const profileEdits = userProfile.profileEdits;
-          
-          if (profileEdits && profileEdits.month === currentMonth) {
-            setEditsCount(profileEdits.count);
-            if (profileEdits.count >= 4) {
-              setCanEdit(false);
-            }
-          } else {
-            setEditsCount(0);
-            setCanEdit(true);
-          }
+
         }
       }
     } catch (error) {
@@ -97,10 +86,7 @@ const EditProfileScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!canEdit) {
-      showAlert('Error', 'You have exceeded the maximum of 4 profile edits this month.');
-      return;
-    }
+
     if (!name.trim()) {
       showAlert('Error', 'Name cannot be empty');
       return;
@@ -129,16 +115,10 @@ const EditProfileScreen = () => {
         }
       }
 
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      
       await saveUserProfile(session.user.id, {
         name: name.trim(),
         username,
-        avatar,
-        profileEdits: {
-          count: editsCount + 1,
-          month: currentMonth
-        }
+        avatar
       });
 
       showAlert('Success', 'Profile updated successfully!');
@@ -185,16 +165,8 @@ const EditProfileScreen = () => {
           </View>
         </TouchableOpacity>
         <Text style={{color: '#6B7280', fontSize: 13, marginTop: 8}}>Tap to change avatar</Text>
-        <Text style={styles.phoneDisplay}>
-          {profile?.phoneNumber || 'No phone'}
-        </Text>
-        
-        <View style={styles.limitsBadge}>
-          <Ionicons name="information-circle" size={16} color="#F59E0B" />
-          <Text style={styles.limitsText}>
-            {4 - editsCount} edits remaining this month
-          </Text>
-        </View>
+
+
       </View>
 
       <View style={styles.card}>
@@ -228,11 +200,7 @@ const EditProfileScreen = () => {
         />
       </View>
 
-      {!canEdit && (
-        <Text style={styles.blockedText}>
-          You have reached your limit of 4 profile updates for this month. You can edit your profile again next month.
-        </Text>
-      )}
+
 
       <TouchableOpacity
         style={[styles.saveButton, (!canEdit || saving) && styles.disabledButton]}
@@ -294,7 +262,7 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: 'center', marginBottom: 32 },
   avatarCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 4, position: 'relative' as any },
   avatarEditBadge: { position: 'absolute' as any, bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-  phoneDisplay: { fontSize: 16, color: '#6B7280', marginBottom: 12, fontWeight: '500' },
+
   limitsBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   limitsText: { fontSize: 14, color: '#D97706', fontWeight: '700', marginLeft: 6 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, marginBottom: 24 },

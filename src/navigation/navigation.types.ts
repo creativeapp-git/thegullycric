@@ -16,6 +16,7 @@ export type RootStackParamList = {
   App: undefined;
   ProfileSetup: { uid: string };
   PublicMatch: { matchId: string };
+  PublicUserProfile: { username: string };
 };
 
 // Auth stack screens
