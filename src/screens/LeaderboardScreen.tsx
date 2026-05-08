@@ -64,7 +64,7 @@ export default function LeaderboardScreen() {
 
       setRows(leaderRows);
     } catch (e) {
-      console.error('Leaderboard fetch error:', e);
+      // silent
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -74,7 +74,7 @@ export default function LeaderboardScreen() {
   useEffect(() => { fetchAndCompute(); }, [fetchAndCompute]);
   const onRefresh = () => { setRefreshing(true); fetchAndCompute(); };
 
-  const renderItem = ({ item, index }: { item: LeaderRow; index: number }) => {
+  const renderItem = useCallback(({ item, index }: { item: LeaderRow; index: number }) => {
     const isTop3 = index < 3;
     const podiumColors = ['#F59E0B', '#94A3B8', '#CD7C2F'];
 
@@ -120,9 +120,9 @@ export default function LeaderboardScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [navigation]);
 
-  const ListHeader = () => (
+  const ListHeader = React.memo(() => (
     <View>
       {/* Trophy header */}
       <View style={styles.heroBox}>
@@ -143,7 +143,7 @@ export default function LeaderboardScreen() {
         </View>
       </View>
     </View>
-  );
+  ));
 
   return (
     <View style={styles.container}>
@@ -159,6 +159,10 @@ export default function LeaderboardScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={8}
           ListEmptyComponent={() => (
             <View style={styles.emptyBox}>
               <Text style={{ fontSize: 40 }}>📋</Text>

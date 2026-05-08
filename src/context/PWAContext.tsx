@@ -45,7 +45,6 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsInstallable(false);
       setInstallPrompt(null);
       setIsInstalled(true);
-      console.log('PWA was installed');
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -66,8 +65,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsInstallable(false);
         setInstallPrompt(null);
       }
-    } catch (e) {
-      console.error('Error prompting install:', e);
+    } catch {
+      // promptInstall error — ignore
     }
   };
 

@@ -43,9 +43,8 @@ export const getAllMatches = async () => {
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*')
+      .select('id,match_id,team1,team2,team1_logo,team2_logo,score1,score2,wickets1,wickets2,overs,match_state,winner,location,date,type,creator_team,created_at')
       .order('created_at', { ascending: false });
-
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
@@ -72,10 +71,9 @@ export const getFixtures = async () => {
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*')
+      .select('id,match_id,team1,team2,team1_logo,team2_logo,overs,match_state,location,date,type,created_at')
       .eq('match_state', 'setup')
       .order('created_at', { ascending: false });
-
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {
@@ -87,10 +85,9 @@ export const getUserMatches = async (userId: string) => {
   try {
     const { data, error } = await supabase
       .from('matches')
-      .select('*')
+      .select('id,match_id,team1,team2,score1,score2,wickets1,wickets2,overs,match_state,winner,creator_team,current_innings,created_at')
       .eq('created_by', userId)
       .order('created_at', { ascending: false });
-
     if (error) throw error;
     return (data || []) as Match[];
   } catch (error: any) {

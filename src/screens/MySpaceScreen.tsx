@@ -22,13 +22,16 @@ const MySpaceScreen = () => {
       const uid = session.user.id;
 
       const [profileRes, matchesRes] = await Promise.all([
-        supabase.from('users').select('*').eq('id', uid).single(),
-        supabase.from('matches').select('*').eq('created_by', uid).order('created_at', { ascending: false }),
+        supabase.from('users').select('id, username, name, avatar, bio').eq('id', uid).single(),
+        supabase.from('matches')
+          .select('id, match_id, team1, team2, score1, score2, wickets1, wickets2, overs, match_state, winner, creator_team, current_innings, created_at')
+          .eq('created_by', uid)
+          .order('created_at', { ascending: false }),
       ]);
 
       setUser(profileRes.data);
       setMatches(matchesRes.data || []);
-    } catch (e) { console.error(e); }
+    } catch (e) { }
     finally { setLoading(false); }
   };
 

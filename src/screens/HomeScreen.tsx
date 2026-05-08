@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,45 +17,48 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchMatches = async (query?: string) => {
+  // Only columns MatchCard actually renders
+  const MATCH_COLUMNS = 'id,match_id,team1,team2,team1_logo,team2_logo,score1,score2,wickets1,wickets2,overs,match_state,winner,location,date,type,created_at';
+
+  const fetchMatches = useCallback(async (query?: string) => {
     try {
       setLoading(true);
-      let supabaseQuery = supabase.from('matches').select('*').order('created_at', { ascending: false }).limit(20);
-      
+      let q = supabase
+        .from('matches')
+        .select(MATCH_COLUMNS)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
       if (query) {
-        supabaseQuery = supabaseQuery.or(`team1.ilike.%${query}%,team2.ilike.%${query}%,name.ilike.%${query}%`);
+        q = q.or(`team1.ilike.%${query}%,team2.ilike.%${query}%`);
       }
-      
-      const { data, error } = await supabaseQuery;
+
+      const { data, error } = await q;
       if (error) throw error;
-      setMatches(data || []);
+      setMatches((data as Match[]) || []);
     } catch {
       // silent — UI shows empty state
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchMatches(searchQuery);
-    }, 300);
+    const timer = setTimeout(() => fetchMatches(searchQuery), 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, fetchMatches]);
 
+  // Realtime — stable subscription that never recreates on search changes
   useEffect(() => {
-    // Subscribe to REALTIME updates for the matches table
     const channel = supabase
-      .channel('public:matches')
+      .channel('home:matches')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
-        fetchMatches(searchQuery);
+        fetchMatches(); // always refetch without filter on realtime events
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [searchQuery]);
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchMatches]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -79,7 +82,7 @@ const HomeScreen = () => {
           <MatchCard 
             key={match.id || match.matchId} 
             match={match} 
-            onPress={() => navigation.navigate('MatchDetail', { matchId: match.id || match.matchId })}
+            onPress={() => navigation.navigate('MatchDetail', { matchId: (match.id || match.matchId)! })}
           />
         ))}
       </View>
