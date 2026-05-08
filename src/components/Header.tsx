@@ -1,27 +1,30 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme';
 
-const Header = () => {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.logoContainer}>
-          <View style={styles.iconBg}>
-            <Ionicons name="trophy" size={20} color={COLORS.white} />
-          </View>
-          <Text style={styles.title}>Gully<Text style={styles.titleBold}>Cric</Text></Text>
+/**
+ * Static app header — memoized so it never re-renders on parent state changes.
+ * Uses TouchableOpacity from react-native (not gesture-handler) to avoid
+ * the import-after-use bug that existed before.
+ */
+const Header = React.memo(() => (
+  <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
+      <View style={styles.logoContainer}>
+        <View style={styles.iconBg}>
+          <Ionicons name="trophy" size={20} color={COLORS.white} />
         </View>
-        <TouchableOpacity style={styles.notifBtn}>
-          <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
-        </TouchableOpacity>
+        <Text style={styles.title}>Gully<Text style={styles.titleBold}>Cric</Text></Text>
       </View>
-    </SafeAreaView>
-  );
-};
+      <TouchableOpacity style={styles.notifBtn} accessibilityLabel="Notifications">
+        <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView>
+));
 
-import { TouchableOpacity } from 'react-native-gesture-handler';
+Header.displayName = 'Header';
 
 const styles = StyleSheet.create({
   safeArea: {

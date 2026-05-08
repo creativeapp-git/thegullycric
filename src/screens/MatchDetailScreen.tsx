@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Platform, RefreshControl, Share
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { getMatchById, updateMatch } from '../services/matchService';
-import { Match, BallEvent } from '../types';
+import { getMatchById } from '../services/matchService';
+import { Match } from '../types';
 import { AppNavigationProp, MatchDetailRouteProp } from '../navigation/navigation.types';
 import { supabase } from '../services/supabase';
+import { SHADOWS } from '../theme';
 
 interface BatterStats { name: string; runs: number; balls: number; fours: number; sixes: number; outStr: string; }
 interface BowlerStats { name: string; legalBalls: number; runs: number; wickets: number; economy: string; }
@@ -28,10 +29,14 @@ const MatchDetailScreen = () => {
   const [scorecardData, setScorecardData] = useState<any>(null);
   const [scorecardLoading, setScorecardLoading] = useState(false);
 
+  const currentUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUserId(session?.user?.id || null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      currentUserIdRef.current = session?.user?.id ?? null;
+      setCurrentUserId(session?.user?.id ?? null);
     });
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchMatch = async () => {
@@ -39,10 +44,10 @@ const MatchDetailScreen = () => {
       setLoading(true);
       const data = await getMatchById(matchId);
       setMatch(data);
-      if (data && data.status !== 'Scheduled') {
+      if (data && data.match_state !== 'setup') {
         setActiveTab('Scorecard');
-        if (data.currentInnings === 2) setScorecardInnings(2);
-        fetchScorecardStats(matchId, data.currentInnings || 1);
+        if (data.current_innings === 2) setScorecardInnings(2);
+        fetchScorecardStats(matchId, data.current_innings || 1);
       }
     } catch (error) {
       console.error('Error fetching match:', error);
@@ -100,7 +105,7 @@ const MatchDetailScreen = () => {
 
   const onRefresh = () => { setRefreshing(true); fetchMatch(); };
 
-  const isOwner = match?.createdBy === currentUserId;
+  const isOwner = match?.created_by === currentUserId || match?.createdBy === currentUserId;
 
   const handleShare = async () => {
     if (!match) return;
@@ -280,8 +285,12 @@ const MatchDetailScreen = () => {
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.matchName} numberOfLines={1}>{match.team1} vs {match.team2}</Text>
           <View style={s.badgeRow}>
-            {match.status === 'Live' && <View style={s.liveBadge}><View style={s.liveDot}/><Text style={s.liveBadgeText}>LIVE</Text></View>}
-            {match.status === 'Completed' && <Text style={s.completedText}>Completed</Text>}
+          {(match.match_state === 'live' || match.status === 'Live') && (
+            <View style={s.liveBadge}><View style={s.liveDot}/><Text style={s.liveBadgeText}>LIVE</Text></View>
+          )}
+          {(match.match_state === 'completed' || match.status === 'Completed') && (
+            <Text style={s.completedText}>Completed</Text>
+          )}
           </View>
         </View>
         <TouchableOpacity style={s.shareBtn} onPress={handleShare}>
@@ -293,7 +302,7 @@ const MatchDetailScreen = () => {
         <TouchableOpacity style={[s.tab, activeTab === 'Info' && s.tabActive]} onPress={() => setActiveTab('Info')}>
           <Text style={[s.tabText, activeTab === 'Info' && s.tabTextActive]}>Info</Text>
         </TouchableOpacity>
-        {match.status !== 'Scheduled' && (
+        {match.match_state !== 'setup' && match.status !== 'Scheduled' && (
           <TouchableOpacity style={[s.tab, activeTab === 'Scorecard' && s.tabActive]} onPress={() => setActiveTab('Scorecard')}>
             <Text style={[s.tabText, activeTab === 'Scorecard' && s.tabTextActive]}>Scorecard</Text>
           </TouchableOpacity>
@@ -310,14 +319,14 @@ const MatchDetailScreen = () => {
       </ScrollView>
 
       {/* Floating Action for Hosts */}
-      {isOwner && match.status === 'Live' && (
+      {isOwner && match.match_state === 'live' && (
         <TouchableOpacity style={s.fab} onPress={() => (navigation as any).navigate('Scoring', { matchId })}>
           <Ionicons name="create" size={24} color="#FFF" />
           <Text style={s.fabText}>Score Match</Text>
         </TouchableOpacity>
       )}
-      {isOwner && match.status === 'Scheduled' && (
-        <TouchableOpacity style={[s.fab, {backgroundColor: '#F59E0B', shadowColor: '#F59E0B'}]} onPress={() => (navigation as any).navigate('CreateMatch', { matchId })}>
+      {isOwner && match.match_state === 'setup' && (
+        <TouchableOpacity style={[s.fab, {backgroundColor: '#F59E0B'}]} onPress={() => (navigation as any).navigate('CreateMatch', { matchId })}>
           <Ionicons name="pencil" size={24} color="#FFF" />
           <Text style={s.fabText}>Edit Fixture</Text>
         </TouchableOpacity>
@@ -349,11 +358,11 @@ const s = StyleSheet.create({
 
   tabContent: { marginTop: 4 },
   performersRow: { flexDirection: 'row', marginBottom: 16 },
-  performerCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  performerCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 16, alignItems: 'center', ...SHADOWS.small },
   performerLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginTop: 8 },
   performerName: { fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 4 },
   performerStats: { fontSize: 13, color: '#10B981', fontWeight: '600', marginTop: 2 },
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, ...SHADOWS.small },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
   infoText: { fontSize: 14, color: '#374151', marginBottom: 8, lineHeight: 20 },
   infoLabel: { fontWeight: '600', color: '#9CA3AF' },
@@ -363,7 +372,7 @@ const s = StyleSheet.create({
 
   inningsToggleRow: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 16 },
   inningsTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  inningsTabActive: { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  inningsTabActive: { backgroundColor: '#FFF', ...SHADOWS.small },
   inningsTabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   inningsTabTextActive: { color: '#111827' },
 
@@ -378,7 +387,7 @@ const s = StyleSheet.create({
   fowText: { fontSize: 13, color: '#4B5563', backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   emptyText: { textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic', marginVertical: 12 },
 
-  fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28, shadowColor: '#10B981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28, ...SHADOWS.medium },
   fabText: { color: '#FFF', fontSize: 15, fontWeight: '700', marginLeft: 8 },
 });
 

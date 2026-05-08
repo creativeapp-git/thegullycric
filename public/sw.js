@@ -43,13 +43,11 @@ self.addEventListener('fetch', (event) => {
 
   // Never intercept Supabase API or WebSocket calls
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(fetch(event.request));
     return;
   }
 
   // Never cache POST/PUT/DELETE
   if (event.request.method !== 'GET') {
-    event.respondWith(fetch(event.request));
     return;
   }
 

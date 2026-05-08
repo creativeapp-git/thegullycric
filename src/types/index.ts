@@ -21,38 +21,83 @@ export interface User {
 }
 
 export interface Match {
+  // --- Primary key (DB: uuid) ---
   id?: string;
-  matchId: string;
-  name: string;
-  type: 'Test' | 'ODI' | 'T20' | 'Gully';
-  overs: number;
-  location: string;
-  date: string;
-  time: string;
+
+  // --- DB snake_case fields (returned from Supabase) ---
+  match_id: string;
+  match_state?: 'setup' | 'live' | 'innings_break' | 'completed';
+  created_by?: string;
   team1: string;
   team2: string;
-  team1Logo?: string;
-  team2Logo?: string;
-  team1Players?: string[];
-  team2Players?: string[];
-  tossWinner?: string;
-  tossDecision?: 'Bat' | 'Bowl';
-  score1?: string;
-  score2?: string;
-  currentInnings?: number;
-  status: 'Scheduled' | 'Live' | 'Completed';
-  description?: string;
-  isDeleted?: boolean;
-  createdBy: string;
+  team1_players?: string[];
+  team2_players?: string[];
+  team1_logo?: string;
+  team2_logo?: string;
+  overs: number;
+  max_balls?: number;
+  current_innings?: number;
+  striker?: string;
+  non_striker?: string;
+  current_bowler?: string;
+  last_bowler?: string;
+  score1?: number;
+  score2?: number;
+  wickets1?: number;
+  wickets2?: number;
+  balls1?: number;
+  balls2?: number;
+  innings1_completed?: boolean;
+  innings2_completed?: boolean;
+  is_public?: boolean;
+  winner?: string;
+  allow_super_over?: boolean;
+  super_score1?: number;
+  super_wickets1?: number;
+  super_score2?: number;
+  super_wickets2?: number;
   creator_team?: string;
-  createdAt?: any;
+  toss_winner?: string;
+  toss_decision?: string;
+  created_at?: string;
+
+  // --- Additional columns that need adding to DB ---
+  name?: string;
+  type?: 'Test' | 'ODI' | 'T20' | 'Gully';
+  location?: string;
+  date?: string;
+  time?: string;
+  description?: string;
   rules?: {
     wideExtraRun: boolean;
     noBallExtraRun: boolean;
     ballByBall: boolean;
     allow_super_over?: boolean;
   };
-  allow_super_over?: boolean;
+  target?: number;
+
+  // --- Legacy camelCase aliases (kept for backward compatibility) ---
+  /** @deprecated Use match_id */
+  matchId?: string;
+  /** @deprecated Use team1_players */
+  team1Players?: string[];
+  /** @deprecated Use team2_players */
+  team2Players?: string[];
+  /** @deprecated Use team1_logo */
+  team1Logo?: string;
+  /** @deprecated Use team2_logo */
+  team2Logo?: string;
+  /** @deprecated Use created_by */
+  createdBy?: string;
+  /** @deprecated Use toss_winner */
+  tossWinner?: string;
+  /** @deprecated Use toss_decision */
+  tossDecision?: string;
+  /** @deprecated Use current_innings */
+  currentInnings?: number;
+  /** @deprecated Use match_state */
+  status?: 'Scheduled' | 'Live' | 'Completed';
+  isDeleted?: boolean;
 }
 
 export interface BallEvent {
@@ -72,6 +117,8 @@ export interface BallEvent {
   wicket_type?: 'bowled' | 'caught' | 'lbw' | 'runout' | 'stumped' | 'hitwicket' | 'retired';
   dismissed_player?: string;
   extras: number;
+  extra_type?: 'wide' | 'noball' | 'bye' | 'legbye';
+  is_legal?: boolean;
   created_at: string;
 }
 

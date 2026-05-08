@@ -30,8 +30,6 @@ const FixturesScreen = () => {
       const activeFixtures = scheduledMatches.filter(m => !m.isDeleted);
       setFixtures(activeFixtures);
       setFilteredFixtures(activeFixtures);
-    } catch (error) {
-      console.error('Error fetching fixtures:', error);
     } finally {
       setLoading(false);
     }
@@ -109,7 +107,26 @@ const FixturesScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   searchContainer: { paddingHorizontal: 20, paddingBottom: 16, paddingTop: 16 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, height: 50 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    height: 50,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+      },
+    }),
+  },
   searchInput: { flex: 1, fontSize: 16, color: '#111827', marginLeft: 12 },
   
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 60, paddingHorizontal: 32 },

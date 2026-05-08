@@ -21,25 +21,39 @@ export const saveUserProfile = async (uid: string, data: Partial<UserProfile>) =
   }
 };
 
+/**
+ * Fetch a user's profile row from the DB.
+ * Returns null if the row does not exist.
+ * Throws { message: 'TIMEOUT' } if the network hangs beyond 8 seconds.
+ */
 export const getUserProfile = async (uid: string) => {
-  try {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('TIMEOUT')), 15000)
-    );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
 
-    const fetchPromise = supabase
+  try {
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', uid)
-      .limit(1);
+      .limit(1)
+      .abortSignal(controller.signal);
 
-    const result: any = await Promise.race([fetchPromise, timeoutPromise]);
-    const { data, error } = result;
+    clearTimeout(timer);
 
-    if (error) throw error;
+    if (error) {
+      if (error.message?.includes('abort') || error.name === 'AbortError') {
+        throw new Error('TIMEOUT');
+      }
+      throw error;
+    }
     return data && data.length > 0 ? data[0] : null;
   } catch (error: any) {
-    if (error.message === 'TIMEOUT') throw error;
+    clearTimeout(timer);
+    const isTimeout =
+      error.message === 'TIMEOUT' ||
+      error.name === 'AbortError' ||
+      error.message?.toLowerCase().includes('abort');
+    if (isTimeout) throw new Error('TIMEOUT');
     return null;
   }
 };

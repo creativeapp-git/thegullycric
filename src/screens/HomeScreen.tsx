@@ -63,9 +63,9 @@ const HomeScreen = () => {
     setRefreshing(false);
   };
 
-  const liveMatches = matches.filter(m => m.status === 'Live');
-  const upcomingMatches = matches.filter(m => m.status === 'Scheduled');
-  const completedMatches = matches.filter(m => m.status === 'Completed');
+  const liveMatches = matches.filter(m => m.match_state === 'live' || m.status === 'Live');
+  const upcomingMatches = matches.filter(m => m.match_state === 'setup' || m.status === 'Scheduled');
+  const completedMatches = matches.filter(m => m.match_state === 'completed' || m.status === 'Completed');
 
   const renderSection = (title: string, data: Match[]) => {
     if (data.length === 0) return null;

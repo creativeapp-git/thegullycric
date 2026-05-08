@@ -8,6 +8,7 @@ import { getUserProfile, saveUserProfile } from '../services/userService';
 import { User } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
 import { usePWA } from '../context/PWAContext';
+import { SHADOWS } from '../theme';
 
 const SUPPORT_EMAIL = 'creative.app.mail@gmail.com';
 
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   settingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
   pageTitle: { fontSize: 32, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
   versionText: { textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 16, fontWeight: '500' },
-  profileCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 },
+  profileCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 32, ...SHADOWS.soft },
   profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   avatarInitial: { fontSize: 28, fontWeight: '800', color: '#FFF' },
@@ -256,7 +257,7 @@ const styles = StyleSheet.create({
   editButton: { backgroundColor: '#10B981', paddingVertical: 12, borderRadius: 16, alignItems: 'center' },
   editButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   sectionHeader: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 12, marginLeft: 8 },
-  optionsCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 8, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 },
+  optionsCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 8, marginBottom: 24, ...SHADOWS.soft },
   optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12 },
   iconContainer: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   optionText: { flex: 1, fontSize: 16, fontWeight: '500', color: '#1F2937' },

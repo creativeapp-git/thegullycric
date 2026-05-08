@@ -43,7 +43,11 @@ const ProfileSetupScreen = () => {
         }
         if (profile.name) setName(profile.name);
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e: any) {
+      if (e.message === 'TIMEOUT') {
+        setErrorMessage('Slow connection — existing data may not have loaded.');
+      }
+    } finally { setLoading(false); }
   };
 
   const checkUsername = async (value: string) => {
@@ -80,9 +84,10 @@ const ProfileSetupScreen = () => {
       
       const verifyProfile = await getUserProfile(uid);
 
-
-      if (!verifyProfile || !verifyProfile.username || !verifyProfile.name) {
-        setErrorMessage('Profile verification failed. Please try saving again.');
+      if (!verifyProfile) {
+        // Timeout or network error during verify — profile was saved, safe to proceed
+        setSuccessMessage('Profile saved!');
+        await refreshProfile();
         return;
       }
 

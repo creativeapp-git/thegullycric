@@ -19,7 +19,7 @@ export const createMatch = async (match: Match) => {
         team2_logo: match.team2Logo,
         team1_players: match.team1Players,
         team2_players: match.team2Players,
-        status: match.status,
+        match_state: match.status === 'Live' ? 'live' : match.status === 'Completed' ? 'completed' : 'setup',
         description: match.description,
         created_by: match.createdBy,
         rules: match.rules,
@@ -58,7 +58,7 @@ export const getLiveMatches = async () => {
     const { data, error } = await supabase
       .from('matches')
       .select('*')
-      .eq('status', 'Live')
+      .eq('match_state', 'live')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -73,7 +73,7 @@ export const getFixtures = async () => {
     const { data, error } = await supabase
       .from('matches')
       .select('*')
-      .eq('status', 'Scheduled')
+      .eq('match_state', 'setup')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
