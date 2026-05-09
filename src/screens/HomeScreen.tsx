@@ -1,5 +1,16 @@
+/**
+ * GullyCric Premium HomeScreen v2.0
+ * - Featured hero live match card
+ * - Sectioned match feed with gradient cards
+ * - Animated search bar
+ * - Dark premium sports dashboard feel
+ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, RefreshControl,
+  TouchableOpacity, TextInput, Animated, StatusBar, Platform
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
@@ -8,57 +19,55 @@ import Header from '../components/Header';
 import MatchCard from '../components/MatchCard';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
 import { AppNavigationProp } from '../navigation/navigation.types';
-import { COLORS, SPACING, SHADOWS, BORDER_RADIUS } from '../theme';
+import { COLORS, SPACING, SHADOWS, BORDER_RADIUS, TYPOGRAPHY } from '../theme';
+import { SectionHeader, Button, EmptyState, ScoreHero, LiveBadge } from '../components/UI';
+
+const MATCH_COLUMNS = 'id,match_id,team1,team2,team1_logo,team2_logo,score1,score2,wickets1,wickets2,overs,match_state,winner,location,date,type,created_at,status';
 
 const HomeScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches]     = useState<Match[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchOpacity = useRef(new Animated.Value(0)).current;
+  const heroOpacity   = useRef(new Animated.Value(0)).current;
 
-  // Only columns MatchCard actually renders
-  const MATCH_COLUMNS = 'id,match_id,team1,team2,team1_logo,team2_logo,score1,score2,wickets1,wickets2,overs,match_state,winner,location,date,type,created_at';
-
+  // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchMatches = useCallback(async (query?: string) => {
     try {
-      setLoading(true);
-      let q = supabase
-        .from('matches')
-        .select(MATCH_COLUMNS)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (query) {
-        q = q.or(`team1.ilike.%${query}%,team2.ilike.%${query}%`);
-      }
-
+      let q = supabase.from('matches').select(MATCH_COLUMNS)
+        .order('created_at', { ascending: false }).limit(30);
+      if (query) q = q.or(`team1.ilike.%${query}%,team2.ilike.%${query}%`);
       const { data, error } = await q;
       if (error) throw error;
       setMatches((data as Match[]) || []);
-    } catch {
-      // silent — UI shows empty state
-    } finally {
-      setLoading(false);
-    }
+    } catch { }
+    finally { setLoading(false); }
   }, []);
 
-  // Debounced search
   useEffect(() => {
-    const timer = setTimeout(() => fetchMatches(searchQuery), 300);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => fetchMatches(searchQuery), 300);
+    return () => clearTimeout(t);
   }, [searchQuery, fetchMatches]);
 
-  // Realtime — stable subscription that never recreates on search changes
+  // Realtime subscription
   useEffect(() => {
-    const channel = supabase
-      .channel('home:matches')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
-        fetchMatches(); // always refetch without filter on realtime events
-      })
+    const ch = supabase.channel('home:matches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => fetchMatches())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(ch); };
   }, [fetchMatches]);
+
+  // Fade in animations
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(heroOpacity,   { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(searchOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [loading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -66,74 +75,124 @@ const HomeScreen = () => {
     setRefreshing(false);
   };
 
-  const liveMatches = matches.filter(m => m.match_state === 'live' || m.status === 'Live');
-  const upcomingMatches = matches.filter(m => m.match_state === 'setup' || m.status === 'Scheduled');
-  const completedMatches = matches.filter(m => m.match_state === 'completed' || m.status === 'Completed');
+  // ── Derived sections ───────────────────────────────────────────────────────
+  const live      = matches.filter(m => m.match_state === 'live'      || m.status === 'Live');
+  const upcoming  = matches.filter(m => m.match_state === 'setup'     || m.status === 'Scheduled');
+  const completed = matches.filter(m => m.match_state === 'completed' || m.status === 'Completed');
+  const featuredLive = live[0] ?? null;
 
-  const renderSection = (title: string, data: Match[]) => {
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  const renderSection = (title: string, data: Match[], accent?: string) => {
     if (data.length === 0) return null;
     return (
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionCount}>{data.length}</Text>
-        </View>
-        {data.map((match) => (
-          <MatchCard 
-            key={match.id || match.matchId} 
-            match={match} 
-            onPress={() => navigation.navigate('MatchDetail', { matchId: (match.id || match.matchId)! })}
+        <SectionHeader
+          title={title}
+          rightAction={
+            <View style={[styles.countBadge, accent ? { borderColor: accent + '40', backgroundColor: accent + '12' } : {}]}>
+              <Text style={[styles.countText, accent ? { color: accent } : {}]}>{data.length}</Text>
+            </View>
+          }
+        />
+        {data.map(m => (
+          <MatchCard
+            key={m.id || m.matchId}
+            match={m}
+            onPress={() => navigation.navigate('MatchDetail', { matchId: (m.id || m.matchId)! })}
           />
         ))}
       </View>
     );
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
       <Header />
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Gully Cricket, <Text style={{color: COLORS.primary}}>Live.</Text></Text>
+        {/* ── Hero section ────────────────────────────────────────────────── */}
+        <LinearGradient
+          colors={['#0F1E35', '#0D1117'] as any}
+          style={styles.heroSection}
+        >
+          <Text style={styles.heroHeadline}>
+            Gully Cricket,{'\n'}<Text style={styles.heroAccent}>Live.</Text>
+          </Text>
           <Text style={styles.heroSub}>Track your local matches like a pro.</Text>
-        </View>
+        </LinearGradient>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={COLORS.textSecondary} />
-          <TextInput 
-            style={styles.searchInput}
-            placeholder="Search teams or match name..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#94A3B8"
-          />
-          {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#CBD5E1" />
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* ── Search ──────────────────────────────────────────────────────── */}
+        <Animated.View style={[styles.searchWrap, { opacity: searchOpacity }]}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={COLORS.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search teams or matches…"
+              placeholderTextColor={COLORS.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery !== '' && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
+        {/* ── Loading ──────────────────────────────────────────────────────── */}
         {loading && !refreshing ? (
-          <View style={{ paddingHorizontal: SPACING.md }}><SkeletonMatchList count={3} /></View>
+          <View style={{ paddingHorizontal: SPACING.lg }}>
+            <SkeletonMatchList count={4} />
+          </View>
         ) : (
           <>
-            {renderSection('Live Now', liveMatches)}
-            {renderSection('Upcoming', upcomingMatches)}
-            {renderSection('Completed', completedMatches)}
-            
+            {/* Featured live hero card */}
+            {featuredLive && !searchQuery && (
+              <Animated.View style={[styles.section, { opacity: heroOpacity }]}>
+                <SectionHeader
+                  title="Featured Live"
+                  rightAction={<LiveBadge size="sm" />}
+                />
+                <ScoreHero
+                  team1={featuredLive.team1}
+                  team2={featuredLive.team2}
+                  score1={`${featuredLive.score1 ?? 0}/${featuredLive.wickets1 ?? 0}`}
+                  score2={`${featuredLive.score2 ?? 0}/${featuredLive.wickets2 ?? 0}`}
+                  isLive
+                  overs={featuredLive.overs ? String(featuredLive.overs) : undefined}
+                  onPress={() => navigation.navigate('MatchDetail', { matchId: (featuredLive.id || featuredLive.matchId)! })}
+                />
+              </Animated.View>
+            )}
+
+            {/* Live matches (all, skip featured) */}
+            {live.length > 1 && renderSection('Live Matches', live.slice(1), COLORS.primary)}
+            {live.length === 1 && !featuredLive && renderSection('Live Matches', live, COLORS.primary)}
+
+            {renderSection('Upcoming', upcoming, COLORS.secondary)}
+            {renderSection('Results', completed, COLORS.textMuted)}
+
+            {/* Empty state */}
             {matches.length === 0 && (
-              <View style={styles.emptyContainer}>
-                <Text style={{fontSize: 48}}>🏏</Text>
-                <Text style={styles.emptyText}>No matches found</Text>
-                <TouchableOpacity style={styles.createBtn} onPress={() => navigation.navigate('CreateMatch')}>
-                  <Text style={styles.createBtnText}>Host First Match</Text>
-                </TouchableOpacity>
-              </View>
+              <EmptyState
+                icon="baseball-outline"
+                title="No matches yet"
+                subtitle="Host a gully cricket match and start scoring live."
+                action={
+                  <Button
+                    title="Host a Match"
+                    onPress={() => navigation.navigate('CreateMatch')}
+                    icon="add-circle-outline"
+                  />
+                }
+              />
             )}
           </>
         )}
@@ -143,21 +202,73 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  scrollContent: { paddingBottom: 100 },
-  hero: { padding: SPACING.lg, paddingBottom: SPACING.md },
-  heroTitle: { fontSize: 28, fontWeight: '900', color: COLORS.text, lineHeight: 34 },
-  heroSub: { fontSize: 15, color: COLORS.textSecondary, marginTop: 4, fontWeight: '500' },
-  section: { paddingHorizontal: SPACING.md, marginTop: SPACING.md },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.md },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  sectionCount: { fontSize: 12, fontWeight: '700', color: COLORS.primary, backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, paddingHorizontal: 40 },
-  emptyText: { fontSize: 16, fontWeight: '700', color: COLORS.textSecondary, marginTop: 16, marginBottom: 24 },
-  createBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: BORDER_RADIUS.lg, ...SHADOWS.medium },
-  createBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, marginHorizontal: SPACING.md, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, gap: 12, ...SHADOWS.small },
-  searchInput: { flex: 1, fontSize: 15, color: COLORS.text, fontWeight: '600', padding: 0 },
+  root:   { flex: 1, backgroundColor: COLORS.background },
+  scroll: { paddingBottom: 120 },
+
+  // Hero banner
+  heroSection: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+  },
+  heroHeadline: {
+    fontSize: TYPOGRAPHY.sizes.xxxl,
+    fontWeight: TYPOGRAPHY.weights.black,
+    color: COLORS.text,
+    lineHeight: 38,
+  },
+  heroAccent: { color: COLORS.primary },
+  heroSub: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.sm,
+    fontWeight: TYPOGRAPHY.weights.medium,
+  },
+
+  // Search
+  searchWrap: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.sm,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardElevated,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 13,
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.small,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.text,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    padding: 0,
+  },
+
+  // Sections
+  section: {
+    paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.xl,
+  },
+  countBadge: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: BORDER_RADIUS.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  countText: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    fontWeight: TYPOGRAPHY.weights.black,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
+  },
 });
 
 export default HomeScreen;

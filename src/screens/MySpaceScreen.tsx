@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import Header from '../components/Header';
 import { SkeletonMatchList } from '../components/SkeletonLoader';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../theme';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../theme';
 
 const MySpaceScreen = () => {
   const navigation = useNavigation<any>();
@@ -49,59 +50,59 @@ const MySpaceScreen = () => {
   const tiedMatches = completedMatches.filter(m => m.winner === 'tie').length;
 
   const getStatusColor = (state: string) => {
-    if (state === 'live') return '#10B981';
-    if (state === 'completed') return '#6366F1';
-    if (state === 'innings_break') return '#F59E0B';
-    return '#94A3B8';
+    if (state === 'live') return COLORS.danger;
+    if (state === 'completed') return COLORS.success;
+    if (state === 'innings_break') return COLORS.warning;
+    return COLORS.textSecondary;
   };
 
   const getStatusLabel = (state: string) => {
-    if (state === 'live') return '🔴 LIVE';
-    if (state === 'completed') return '✅ COMPLETED';
-    if (state === 'innings_break') return '☕ INNINGS BREAK';
-    if (state === 'setup') return '⚙️ SETUP';
+    if (state === 'live') return 'LIVE';
+    if (state === 'completed') return 'COMPLETED';
+    if (state === 'innings_break') return 'INNINGS BREAK';
+    if (state === 'setup') return 'SETUP';
     return state?.toUpperCase().replace(/_/g, ' ') || 'UNKNOWN';
   };
 
   const renderHeader = () => (
     <View style={styles.headerSection}>
-      {/* Profile */}
-      <View style={styles.profileBox}>
+      {/* Gradient Profile Banner */}
+      <LinearGradient colors={['#0F1E35', '#0D1117'] as any} style={styles.profileBanner}>
         <View style={styles.avatarContainer}>
           {user?.avatar ? (
             <Image source={{ uri: user.avatar }} style={styles.avatar} />
           ) : (
-            <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 36 }}>👤</Text></View>
+            <View style={styles.avatarPlaceholder}><Ionicons name="person" size={36} color={COLORS.primary} /></View>
           )}
           <TouchableOpacity style={styles.editBadge} onPress={() => navigation.navigate('EditProfile')}>
-            <Ionicons name="pencil" size={12} color={COLORS.white} />
+            <Ionicons name="pencil" size={11} color={COLORS.black} />
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user?.name || user?.username || 'Player'}</Text>
         <Text style={styles.userHandle}>@{user?.username || 'cricketer'}</Text>
         {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
-      </View>
+      </LinearGradient>
 
       {/* Stats Grid */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: '#EFF6FF' }]}>
-          <Text style={[styles.statValue, { color: '#3B82F6' }]}>{totalMatches}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: COLORS.secondary }]}>{totalMatches}</Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
-          <Text style={[styles.statValue, { color: '#10B981' }]}>{wonMatches}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: COLORS.primary }]}>{wonMatches}</Text>
           <Text style={styles.statLabel}>Wins</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#FEF2F2' }]}>
-          <Text style={[styles.statValue, { color: '#EF4444' }]}>{lostMatches}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: COLORS.danger }]}>{lostMatches}</Text>
           <Text style={styles.statLabel}>Losses</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
-          <Text style={[styles.statValue, { color: '#F59E0B' }]}>{liveMatches}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: COLORS.warning }]}>{liveMatches}</Text>
           <Text style={styles.statLabel}>Live</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: '#FDF4FF' }]}>
-          <Text style={[styles.statValue, { color: '#A855F7' }]}>{tiedMatches}</Text>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: COLORS.textSecondary }]}>{tiedMatches}</Text>
           <Text style={styles.statLabel}>Tied</Text>
         </View>
       </View>
@@ -110,7 +111,7 @@ const MySpaceScreen = () => {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>My Matches</Text>
         <TouchableOpacity style={styles.addMatchBtn} onPress={() => navigation.navigate('CreateMatch')}>
-          <Ionicons name="add" size={20} color={COLORS.primary} />
+          <Ionicons name="add" size={18} color={COLORS.black} />
           <Text style={styles.addMatchText}>New Match</Text>
         </TouchableOpacity>
       </View>
@@ -155,8 +156,8 @@ const MySpaceScreen = () => {
         {/* Winner / Target line */}
         {isCompleted && item.winner && (
           <View style={styles.resultRow}>
-            <Ionicons name={item.winner === 'tie' ? 'swap-horizontal' : 'trophy'} size={13} color={item.winner === 'tie' ? '#F59E0B' : '#10B981'} />
-            <Text style={[styles.resultText, { color: item.winner === 'tie' ? '#F59E0B' : '#10B981' }]}>
+            <Ionicons name={item.winner === 'tie' ? 'swap-horizontal' : 'trophy'} size={13} color={item.winner === 'tie' ? COLORS.warning : COLORS.primary} />
+            <Text style={[styles.resultText, { color: item.winner === 'tie' ? COLORS.warning : COLORS.primary }]}>
               {item.winner === 'tie' ? 'Match Tied' : `${item.winner} won`}
             </Text>
           </View>
@@ -190,11 +191,11 @@ const MySpaceScreen = () => {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={() => (
             <View style={styles.emptyBox}>
-              <Text style={{ fontSize: 40 }}>🏏</Text>
+              <Ionicons name="tennisball-outline" size={56} color={COLORS.border} />
               <Text style={styles.emptyTitle}>No matches yet</Text>
               <Text style={styles.emptySub}>Create your first match to get started</Text>
               <TouchableOpacity style={styles.createBtn} onPress={() => navigation.navigate('CreateMatch')}>
-                <Text style={styles.createBtnText}>+ Create Match</Text>
+                <Text style={styles.createBtnText}>Create Match</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -206,45 +207,56 @@ const MySpaceScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  headerSection: { padding: SPACING.lg },
-  profileBox: { alignItems: 'center', marginBottom: SPACING.xl },
+  headerSection: { paddingBottom: SPACING.sm },
+
+  // Profile banner
+  profileBanner: { alignItems: 'center', paddingTop: SPACING.xxl, paddingBottom: SPACING.xl, paddingHorizontal: SPACING.xl },
+  profileBox: { alignItems: 'center', marginBottom: SPACING.xl, paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg },
   avatarContainer: { position: 'relative', marginBottom: SPACING.md },
-  avatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: COLORS.primaryLight },
-  avatarPlaceholder: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: COLORS.white },
-  userName: { fontSize: 22, fontWeight: '900', color: COLORS.text, marginTop: 4 },
-  userHandle: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500', marginTop: 2 },
-  bio: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', marginTop: 8, paddingHorizontal: SPACING.lg },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: SPACING.xl },
-  statCard: { flex: 1, padding: 14, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', ...SHADOWS.soft },
-  statValue: { fontSize: 22, fontWeight: '900' },
-  statLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '700', marginTop: 4, textTransform: 'uppercase' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  addMatchBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  addMatchText: { color: COLORS.primary, fontWeight: '700', fontSize: 13, marginLeft: 4 },
+  avatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: COLORS.primary },
+  avatarPlaceholder: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.cardElevated, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.primary, ...SHADOWS.glowPrimary },
+  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.background },
+  userName: { fontSize: TYPOGRAPHY.sizes.xxl, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.text, marginTop: SPACING.sm },
+  userHandle: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, fontWeight: TYPOGRAPHY.weights.medium, marginTop: 2 },
+  bio: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, textAlign: 'center', marginTop: SPACING.sm },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.xl, paddingHorizontal: SPACING.lg },
+  statCard: { flex: 1, padding: SPACING.md, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', backgroundColor: COLORS.cardElevated, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.small },
+  statValue: { fontSize: TYPOGRAPHY.sizes.xxl, fontWeight: TYPOGRAPHY.weights.black },
+  statLabel: { fontSize: 9, color: COLORS.textMuted, fontWeight: TYPOGRAPHY.weights.bold, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Section header
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, paddingHorizontal: SPACING.lg },
+  sectionTitle: { fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 1 },
+  addMatchBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.md, gap: 4, ...SHADOWS.glowPrimary },
+  addMatchText: { color: COLORS.black, fontWeight: TYPOGRAPHY.weights.black, fontSize: TYPOGRAPHY.sizes.xs, letterSpacing: 0.3 },
+
+  // Match list
   list: { paddingHorizontal: SPACING.lg, paddingBottom: 100 },
-  matchCard: { backgroundColor: COLORS.white, borderRadius: BORDER_RADIUS.xl, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.soft },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
-  statusText: { fontSize: 11, fontWeight: '800' },
-  matchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  matchCard: { backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.md, borderWidth: 1, borderColor: COLORS.border, ...SHADOWS.medium },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: BORDER_RADIUS.pill, marginBottom: SPACING.md },
+  statusText: { fontSize: 9, fontWeight: TYPOGRAPHY.weights.black, letterSpacing: 0.8 },
+  matchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
   teamCol: { flex: 1 },
-  teamName: { fontSize: 15, fontWeight: '800', color: COLORS.text },
-  scoreNum: { fontSize: 22, fontWeight: '900', color: COLORS.textSecondary, marginTop: 2 },
+  teamName: { fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text },
+  scoreNum: { fontSize: TYPOGRAPHY.sizes.xl, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.textSecondary, marginTop: 2 },
   activeBatting: { color: COLORS.primary },
   vsCol: { paddingHorizontal: 12, alignItems: 'center' },
-  vsText: { fontSize: 12, fontWeight: '900', color: COLORS.textSecondary, opacity: 0.5 },
-  oversText: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  resultText: { fontSize: 13, fontWeight: '700' },
-  targetLine: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 8, fontWeight: '600' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, marginTop: 4 },
-  matchId: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600' },
+  vsText: { fontSize: 9, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.textMuted, backgroundColor: COLORS.card, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, overflow: 'hidden', letterSpacing: 0.5 },
+  oversText: { fontSize: 10, color: COLORS.textSecondary, marginTop: 2, fontWeight: TYPOGRAPHY.weights.medium },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: SPACING.sm },
+  resultText: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.bold },
+  targetLine: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.warning, marginBottom: SPACING.sm, fontWeight: TYPOGRAPHY.weights.semibold },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.borderLight, paddingTop: SPACING.sm, marginTop: SPACING.xs },
+  matchId: { fontSize: 10, color: COLORS.textMuted, fontWeight: TYPOGRAPHY.weights.medium },
+
+  // Empty state
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginTop: 12 },
-  emptySub: { fontSize: 14, color: COLORS.textSecondary, marginTop: 6, textAlign: 'center' },
-  createBtn: { marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 14 },
-  createBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
+  emptyTitle: { fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text, marginTop: SPACING.md },
+  emptySub: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, marginTop: SPACING.sm, textAlign: 'center' },
+  createBtn: { marginTop: SPACING.xl, backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: BORDER_RADIUS.lg, ...SHADOWS.glowPrimary },
+  createBtnText: { color: COLORS.black, fontWeight: TYPOGRAPHY.weights.black, fontSize: TYPOGRAPHY.sizes.md, letterSpacing: 0.3 },
 });
 
 export default MySpaceScreen;

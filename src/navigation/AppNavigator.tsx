@@ -49,9 +49,22 @@ const TabNavigator = () => {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#10B981',
-        tabBarInactiveTintColor: 'gray',
-        tabBarStyle: { backgroundColor: '#fff' },
+        tabBarActiveTintColor: '#00E676',
+        tabBarInactiveTintColor: '#475569',
+        tabBarStyle: {
+          backgroundColor: '#111827',
+          borderTopWidth: 1,
+          borderTopColor: '#263347',
+          paddingBottom: 6,
+          paddingTop: 6,
+          height: 62,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 0.3,
+          marginTop: 2,
+        },
         headerShown: false,
       })}
     >

@@ -4,12 +4,13 @@ import {
   ActivityIndicator, Platform, RefreshControl, Share
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { getMatchById } from '../services/matchService';
 import { Match } from '../types';
 import { AppNavigationProp, MatchDetailRouteProp } from '../navigation/navigation.types';
 import { supabase } from '../services/supabase';
-import { SHADOWS } from '../theme';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../theme';
 
 interface BatterStats { name: string; runs: number; balls: number; fours: number; sixes: number; outStr: string; }
 interface BowlerStats { name: string; legalBalls: number; runs: number; wickets: number; economy: string; }
@@ -158,14 +159,13 @@ const MatchDetailScreen = () => {
   const { batters, bowlers, summary } = getScorecardStats();
 
   const renderInfoTab = () => {
-    // For the Info tab, we'll just show match details and a button to view full summary
     return (
       <View style={s.tabContent}>
         <TouchableOpacity 
-          style={[s.card, {backgroundColor: '#10B981', alignItems: 'center'}]}
+          style={[s.card, {backgroundColor: COLORS.cardElevated, alignItems: 'center', borderColor: COLORS.primary, borderWidth: 1}]}
           onPress={() => navigation.navigate('MatchSummary', { matchId })}
         >
-          <Text style={{color: '#FFF', fontWeight: '700'}}>View Full Match Summary & Stats</Text>
+          <Text style={{color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md}}>View Full Match Summary & Stats</Text>
         </TouchableOpacity>
 
         <View style={s.card}>
@@ -179,23 +179,27 @@ const MatchDetailScreen = () => {
 
         {match.tossWinner && (
           <View style={s.tossCard}>
-            <Ionicons name="trophy-outline" size={16} color="#F59E0B" />
+            <Ionicons name="trophy-outline" size={16} color={COLORS.warning} />
             <Text style={s.tossText}>{match.tossWinner} won the toss and chose to {match.tossDecision?.toLowerCase()}</Text>
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', gap: 16 }}>
-          <View style={[s.card, { flex: 1 }]}>
-            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
-              {(match.team1_logo || match.team1Logo) && <Text style={{fontSize: 20, marginRight: 8}}>{match.team1_logo || match.team1Logo}</Text>}
-              <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team1}</Text>
+        <View style={{ flexDirection: 'row', gap: SPACING.lg }}>
+          <View style={[s.card, { flex: 1, padding: SPACING.md, alignItems: 'center' }]}>
+            <View style={{alignItems: 'center', marginBottom: SPACING.md}}>
+              <View style={{padding: SPACING.sm, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: BORDER_RADIUS.pill, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderLight}}>
+                <Ionicons name="shield-half" size={24} color={COLORS.primary} />
+              </View>
+              <Text style={[s.cardTitle, {marginBottom: 0, textAlign: 'center'}]}>{match.team1}</Text>
             </View>
             {(match.team1_players || match.team1Players || []).map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
           </View>
-          <View style={[s.card, { flex: 1 }]}>
-            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
-              {(match.team2_logo || match.team2Logo) && <Text style={{fontSize: 20, marginRight: 8}}>{match.team2_logo || match.team2Logo}</Text>}
-              <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team2}</Text>
+          <View style={[s.card, { flex: 1, padding: SPACING.md, alignItems: 'center' }]}>
+            <View style={{alignItems: 'center', marginBottom: SPACING.md}}>
+              <View style={{padding: SPACING.sm, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: BORDER_RADIUS.pill, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderLight}}>
+                <Ionicons name="shield-half" size={24} color={COLORS.secondary} />
+              </View>
+              <Text style={[s.cardTitle, {marginBottom: 0, textAlign: 'center'}]}>{match.team2}</Text>
             </View>
             {(match.team2_players || match.team2Players || []).map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
           </View>
@@ -226,21 +230,30 @@ const MatchDetailScreen = () => {
           <Text style={[s.colNum, s.colHeader]}>6s</Text>
           <Text style={[s.colNum, s.colHeader, {flex: 1.5}]}>SR</Text>
         </View>
-        {batters.map((b: any, i: number) => (
+        {batters.map((b: any, i: number) => {
+          const isStriker = b.name === match?.striker;
+          const isNonStriker = b.name === match?.non_striker;
+          return (
           <View key={i}>
-            <View style={s.tableRow}>
+            <View style={[s.tableRow, isStriker && {backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 4, borderRadius: 4}]}>
               <View style={s.colName}>
-                <Text style={{fontWeight: '600'}} numberOfLines={1}>{b.name}</Text>
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                  <Text style={[s.primaryText, isStriker && {color: COLORS.primary}]} numberOfLines={1}>
+                    {b.name}
+                  </Text>
+                  {isStriker && <Ionicons name="flash" size={12} color={COLORS.primary} style={{marginLeft: 4}} />}
+                  {isNonStriker && <Ionicons name="walk" size={12} color={COLORS.textSecondary} style={{marginLeft: 4}} />}
+                </View>
                 <Text style={s.outStr}>{b.is_out ? (b.dismissal || 'out') : 'not out'}</Text>
               </View>
-              <Text style={[s.colNum, {fontWeight: '700'}]}>{b.runs}</Text>
+              <Text style={[s.colNum, s.highlightText]}>{b.runs}</Text>
               <Text style={s.colNum}>{b.balls}</Text>
               <Text style={s.colNum}>{b.fours}</Text>
               <Text style={s.colNum}>{b.sixes}</Text>
               <Text style={[s.colNum, {flex: 1.5}]}>{b.strike_rate}</Text>
             </View>
           </View>
-        ))}
+        )})}
         {batters.length === 0 && <Text style={s.emptyText}>No batting data yet.</Text>}
       </View>
 
@@ -255,10 +268,10 @@ const MatchDetailScreen = () => {
         </View>
         {bowlers.map((b: any, i: number) => (
           <View key={i} style={s.tableRow}>
-            <Text style={[s.colName, {fontWeight: '600'}]} numberOfLines={1}>{b.name}</Text>
+            <Text style={[s.colName, s.primaryText]} numberOfLines={1}>{b.name}</Text>
             <Text style={s.colNum}>{Math.floor(b.legalBalls/6)}.{b.legalBalls%6}</Text>
             <Text style={s.colNum}>{b.runs}</Text>
-            <Text style={[s.colNum, {fontWeight: '700'}]}>{b.wickets}</Text>
+            <Text style={[s.colNum, s.highlightText]}>{b.wickets}</Text>
             <Text style={[s.colNum, {flex: 1.5}]}>{b.economy}</Text>
           </View>
         ))}
@@ -279,25 +292,25 @@ const MatchDetailScreen = () => {
 
   return (
     <View style={s.root}>
-      <View style={s.header}>
+      <LinearGradient colors={['#0F1E35', '#0D1117'] as any} start={{x:0,y:0}} end={{x:1,y:0}} style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color="#1F2937" />
+          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={s.matchName} numberOfLines={1}>{match.team1} vs {match.team2}</Text>
           <View style={s.badgeRow}>
           {(match.match_state === 'live' || match.status === 'Live') && (
             <View style={s.liveBadge}><View style={s.liveDot}/><Text style={s.liveBadgeText}>LIVE</Text></View>
           )}
           {(match.match_state === 'completed' || match.status === 'Completed') && (
-            <Text style={s.completedText}>Completed</Text>
+            <View style={s.completedBadge}><Text style={s.completedText}>COMPLETED</Text></View>
           )}
           </View>
         </View>
         <TouchableOpacity style={s.shareBtn} onPress={handleShare}>
-          <Ionicons name="share-social" size={20} color="#10B981" />
+          <Ionicons name="share-social" size={18} color={COLORS.black} />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       <View style={s.tabsRow}>
         <TouchableOpacity style={[s.tab, activeTab === 'Info' && s.tabActive]} onPress={() => setActiveTab('Info')}>
@@ -314,7 +327,7 @@ const MatchDetailScreen = () => {
         style={{ flex: 1 }}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
       >
         {activeTab === 'Info' ? renderInfoTab() : renderScorecardTab()}
       </ScrollView>
@@ -322,14 +335,14 @@ const MatchDetailScreen = () => {
       {/* Floating Action for Hosts */}
       {isOwner && match.match_state === 'live' && (
         <TouchableOpacity style={s.fab} onPress={() => (navigation as any).navigate('Scoring', { matchId })}>
-          <Ionicons name="create" size={24} color="#FFF" />
+          <Ionicons name="create" size={22} color={COLORS.black} />
           <Text style={s.fabText}>Score Match</Text>
         </TouchableOpacity>
       )}
       {isOwner && match.match_state === 'setup' && (
-        <TouchableOpacity style={[s.fab, {backgroundColor: '#F59E0B'}]} onPress={() => (navigation as any).navigate('CreateMatch', { matchId })}>
-          <Ionicons name="pencil" size={24} color="#FFF" />
-          <Text style={s.fabText}>Edit Fixture</Text>
+        <TouchableOpacity style={[s.fab, {backgroundColor: COLORS.warning}]} onPress={() => (navigation as any).navigate('CreateMatch', { matchId })}>
+          <Ionicons name="pencil" size={22} color={COLORS.black} />
+          <Text style={[s.fabText, {color: COLORS.black}]}>Edit Fixture</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -337,59 +350,57 @@ const MatchDetailScreen = () => {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F9FAFB' },
+  root: { flex: 1, backgroundColor: COLORS.background },
   center: { justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { padding: 20, paddingBottom: 100 },
+  scrollContent: { padding: SPACING.lg, paddingBottom: 100 },
   
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  matchName: { fontSize: 18, fontWeight: '800', color: '#111827' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: SPACING.lg, paddingTop: Platform.OS === 'ios' ? 50 : SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  backBtn: { width: 40, height: 40, borderRadius: BORDER_RADIUS.pill, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderGlass },
+  matchName: { fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.text, letterSpacing: 0.2 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginRight: 4 },
-  liveBadgeText: { fontSize: 10, fontWeight: '800', color: '#EF4444' },
-  completedText: { fontSize: 12, fontWeight: '700', color: '#10B981' },
-  shareBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,230,118,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: BORDER_RADIUS.pill, borderWidth: 1, borderColor: 'rgba(0,230,118,0.3)' },
+  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.primary, marginRight: 5 },
+  liveBadgeText: { fontSize: 9, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.primary, letterSpacing: 0.8 },
+  completedBadge: { backgroundColor: 'rgba(0,230,118,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: BORDER_RADIUS.pill, borderWidth: 1, borderColor: 'rgba(0,230,118,0.2)' },
+  completedText: { fontSize: 9, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.primary, letterSpacing: 0.8 },
+  shareBtn: { width: 38, height: 38, borderRadius: BORDER_RADIUS.pill, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', ...SHADOWS.glowPrimary },
 
-  tabsRow: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  tab: { flex: 1, paddingVertical: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: '#10B981' },
-  tabText: { fontSize: 15, fontWeight: '600', color: '#6B7280' },
-  tabTextActive: { color: '#111827' },
+  tabsRow: { flexDirection: 'row', backgroundColor: COLORS.cardElevated, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  tab: { flex: 1, paddingVertical: SPACING.md, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: COLORS.primary },
+  tabText: { fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.textSecondary },
+  tabTextActive: { color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold },
 
-  tabContent: { marginTop: 4 },
-  performersRow: { flexDirection: 'row', marginBottom: 16 },
-  performerCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 16, alignItems: 'center', ...SHADOWS.small },
-  performerLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', marginTop: 8 },
-  performerName: { fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 4 },
-  performerStats: { fontSize: 13, color: '#10B981', fontWeight: '600', marginTop: 2 },
-  card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, ...SHADOWS.small },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
-  infoText: { fontSize: 14, color: '#374151', marginBottom: 8, lineHeight: 20 },
-  infoLabel: { fontWeight: '600', color: '#9CA3AF' },
-  tossCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 12, borderRadius: 12, marginBottom: 16 },
-  tossText: { fontSize: 13, fontWeight: '600', color: '#D97706', marginLeft: 8 },
-  playerItem: { fontSize: 14, color: '#374151', marginBottom: 6 },
+  tabContent: { marginTop: SPACING.sm },
+  card: { backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.small },
+  cardTitle: { fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text, marginBottom: SPACING.md, textTransform: 'uppercase', letterSpacing: 0.5 },
+  infoText: { fontSize: TYPOGRAPHY.sizes.md, color: COLORS.text, marginBottom: 8, lineHeight: 22 },
+  infoLabel: { fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.textSecondary },
+  tossCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: SPACING.md, borderRadius: BORDER_RADIUS.md, marginBottom: SPACING.lg, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.2)' },
+  tossText: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.warning, marginLeft: 8 },
+  playerItem: { fontSize: TYPOGRAPHY.sizes.md, color: COLORS.textSecondary, marginBottom: 8 },
 
-  inningsToggleRow: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 4, marginBottom: 16 },
-  inningsTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  inningsTabActive: { backgroundColor: '#FFF', ...SHADOWS.small },
-  inningsTabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  inningsTabTextActive: { color: '#111827' },
+  inningsToggleRow: { flexDirection: 'row', backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, padding: 4, marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.border },
+  inningsTab: { flex: 1, paddingVertical: SPACING.sm, alignItems: 'center', borderRadius: BORDER_RADIUS.sm },
+  inningsTabActive: { backgroundColor: COLORS.cardElevated, ...SHADOWS.small, borderWidth: 1, borderColor: COLORS.borderLight },
+  inningsTabText: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.textSecondary },
+  inningsTabTextActive: { color: COLORS.text, fontWeight: TYPOGRAPHY.weights.bold },
 
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 8, marginBottom: 8 },
-  tableRow: { flexDirection: 'row', paddingVertical: 6, alignItems: 'center' },
-  colName: { flex: 3, fontSize: 14, color: '#111827' },
-  colNum: { flex: 1, fontSize: 14, color: '#374151', textAlign: 'right' },
-  colHeader: { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
-  outStr: { fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginBottom: 8 },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, paddingBottom: SPACING.sm, marginBottom: SPACING.sm },
+  tableRow: { flexDirection: 'row', paddingVertical: 8, alignItems: 'center' },
+  colName: { flex: 3, fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.text },
+  colNum: { flex: 1, fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, textAlign: 'right', fontWeight: TYPOGRAPHY.weights.medium },
+  colHeader: { fontSize: 11, color: COLORS.textMuted, fontWeight: TYPOGRAPHY.weights.bold, textTransform: 'uppercase' },
+  outStr: { fontSize: 11, color: COLORS.textSecondary, fontStyle: 'italic', marginBottom: 4 },
+  primaryText: { fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text },
+  highlightText: { fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.primary },
   
   fowContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fowText: { fontSize: 13, color: '#4B5563', backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  emptyText: { textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic', marginVertical: 12 },
+  fowText: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, backgroundColor: COLORS.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border },
+  emptyText: { textAlign: 'center', color: COLORS.textSecondary, fontStyle: 'italic', marginVertical: SPACING.lg },
 
-  fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: '#10B981', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28, ...SHADOWS.medium },
-  fabText: { color: '#FFF', fontSize: 15, fontWeight: '700', marginLeft: 8 },
+  fab: { position: 'absolute', bottom: SPACING.xl, right: SPACING.xl, backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderRadius: BORDER_RADIUS.pill, ...SHADOWS.glowPrimary },
+  fabText: { color: COLORS.black, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.black, marginLeft: 8, letterSpacing: 0.3 },
 });
 
 export default MatchDetailScreen;

@@ -4,11 +4,28 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { COLORS, BORDER_RADIUS } from '../theme';
-import { fetchPublicMatchDetails, fetchMatchBalls, followMatch, unfollowMatch, checkIsFollowing } from '../services/userService';
-import { updateMatchStats, updatePlayerStats } from '../services/matchService';
 import { CONFIG } from '../config';
 import { Button, Card } from '../components/UI';
 import { useNotification } from '../context/NotificationContext';
+import {
+  buildEditedCommentary,
+  canAutoRestoreAfterUndo,
+  getActiveBalls,
+  getBallResultLabel,
+  getCurrentInningsBalls,
+  getCurrentLegalBallCount,
+  getCurrentScore,
+  getCurrentWickets,
+  getExtraRunOptions,
+  getMaxWicketsForPlayers,
+  getOutPlayersForInnings,
+  getPhysicalRuns,
+  getRunsToBatter,
+  getRunsToBowler,
+  isEditedBall,
+  normalizePlayers,
+  restoreStrikeAfterUndo,
+} from '../utils/liveScoring';
 
 const APP_URL = 'https://thegullycric.web.app';
 
@@ -72,13 +89,23 @@ export default function PublicMatchScreen() {
   const [pendingBowlerChange, setPendingBowlerChange] = useState(false);
   const [showExtraPicker, setShowExtraPicker] = useState(false);
   const [pendingExtraType, setPendingExtraType] = useState<'legbye'|'bye'|'wide'|'noball'|null>(null);
+  const openSelectionModal = useCallback((type: 'initial'|'bowler'|'batter'|'wicket') => {
+    setSelectionType(type);
+    setSelectedStriker(null);
+    setSelectedNonStriker(null);
+    setSelectedBowler(null);
+    setWicketType(null);
+    setWicketFielder(null);
+    setRunOutPlayer(null);
+    setShowModal(true);
+  }, []);
 
   const fetchBalls = useCallback(async (uuid: string, innings: number) => {
     try {
       const { data } = await supabase.from('balls').select('*').eq('match_id', uuid).eq('innings', innings).order('created_at', { ascending: true });
       const balls = data || [];
       setInningsBalls(balls);
-      const legal = balls.filter((b: any) => b.is_legal !== false).length;
+      const legal = getCurrentLegalBallCount(balls, innings);
       setTotalLegalBalls(legal);
       setCurrentOverNum(Math.floor(legal / 6));
     } catch(e) { console.error('fetchBalls:', e); }
@@ -116,13 +143,13 @@ export default function PublicMatchScreen() {
             !data.current_bowler
           )
         ) {
-          setSelectionType('initial'); setShowModal(true);
+          openSelectionModal('initial');
         }
         await fetchBalls(data.id, data.current_innings || 1);
       }
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
-  }, [matchId, fetchBalls]);
+  }, [matchId, fetchBalls, openSelectionModal]);
 
   const checkIfFollowing = async (uid: string) => {
     const { data } = await supabase.from('match_followers').select('*').eq('match_id', matchId).eq('user_id', uid).maybeSingle();
@@ -202,31 +229,37 @@ export default function PublicMatchScreen() {
   }, [matchUuid]);
 
   // ── HELPERS ──
-  const isLive = match?.match_state === 'live';
+const isLive = match?.match_state === 'live';
   const isSuperOver = match?.current_innings === 3 || match?.current_innings === 4;
   const maxBalls = isSuperOver ? 6 : (match?.overs * 6);
   
   // Dynamic Score Calculation (Single Source of Truth)
-  const currentInningsBalls = inningsBalls; // Already filtered for current_innings by fetchMatch
-  const currentScore = currentInningsBalls.reduce((s, b) => s + (b.runs || 0) + (b.extras || 0), 0);
-  const currentWickets = currentInningsBalls.filter(b => b.is_wicket).length;
+  const activeBalls = useMemo(() => getActiveBalls(inningsBalls), [inningsBalls]);
+  const currentInningsBalls = useMemo(
+    () => getCurrentInningsBalls(inningsBalls, match?.current_innings || 1),
+    [inningsBalls, match?.current_innings],
+  );
+  const currentScore = getCurrentScore(inningsBalls, match?.current_innings || 1);
+  const currentWickets = getCurrentWickets(inningsBalls, match?.current_innings || 1);
   
   const scoreField = match?.current_innings === 1 ? 'score1' : 'score2';
   const wicketsField = match?.current_innings === 1 ? 'wickets1' : 'wickets2';
   
-  const outPlayers = match?.out_players || [];
+  const outPlayers = useMemo(
+    () => getOutPlayersForInnings(inningsBalls, match?.current_innings || 1),
+    [inningsBalls, match?.current_innings],
+  );
   const battingFirst = match?.toss_decision === 'Bat' ? match?.toss_winner : (match?.toss_winner === match?.team1 ? match?.team2 : match?.team1);
   const battingSecond = battingFirst === match?.team1 ? match?.team2 : match?.team1;
   const battingTeamName = match?.current_innings === 1 || match?.current_innings === 3 ? battingFirst : battingSecond;
   
-  const battingTeamPlayers = battingTeamName === match?.team1 ? (match?.team1_players || match?.team1Players) : (match?.team2_players || match?.team2Players);
-  const bowlingTeamPlayers = battingTeamName === match?.team1 ? (match?.team2_players || match?.team2Players) : (match?.team1_players || match?.team1Players);
-  const availableBatters = (battingTeamPlayers || []).filter((p: string) => !outPlayers.includes(p));
+  const battingTeamPlayers = normalizePlayers(battingTeamName === match?.team1 ? (match?.team1_players || match?.team1Players) : (match?.team2_players || match?.team2Players));
+  const bowlingTeamPlayers = normalizePlayers(battingTeamName === match?.team1 ? (match?.team2_players || match?.team2Players) : (match?.team1_players || match?.team1Players));
+  const availableBatters = battingTeamPlayers.filter((p: string) => !outPlayers.includes(p) && p !== match?.striker && p !== match?.non_striker);
   const availableBowlers = (bowlingTeamPlayers || []).filter((p: string) => p !== match?.last_bowler);
-  const maxWickets = (battingTeamPlayers?.length ?? 11) - 1;
-
+  const maxWickets = getMaxWicketsForPlayers(battingTeamPlayers);
   const getBowlerStats = (bName: string) => {
-    const bBalls = inningsBalls.filter((b: any) => b.bowler === bName);
+    const bBalls = activeBalls.filter((b: any) => b.bowler === bName);
     const legal = bBalls.filter((b: any) => b.is_legal !== false).length;
     const runs = bBalls.filter((b: any) => b.extra_type !== 'bye' && b.extra_type !== 'legbye').reduce((sum: number, b: any) => sum + (b.runs || 0) + (b.extras || 0), 0);
     const wkts = bBalls.filter((b: any) => b.is_wicket && b.wicket_type !== 'runout').length;
@@ -234,7 +267,7 @@ export default function PublicMatchScreen() {
   };
 
   const getBatterStats = (pName: string) => {
-    const bBalls = inningsBalls.filter(b => b.batter === pName);
+    const bBalls = activeBalls.filter(b => b.batter === pName);
     const runs = bBalls.filter(b => b.extra_type !== 'bye' && b.extra_type !== 'legbye').reduce((sum, b) => sum + (b.runs || 0), 0);
     const balls = bBalls.filter(b => b.is_legal !== false).length;
     return `${runs} (${balls})`;
@@ -306,34 +339,38 @@ export default function PublicMatchScreen() {
     await updateMatchStats({ match_state: nextState });
   };
 
-  const recalculateMatchState = async (balls: any[]) => {
+  const recalculateMatchState = async (balls: any[], undoneBall?: any) => {
     if (!matchUuid) return;
     try {
+      const active = getActiveBalls(balls);
+      const currentInnings = match?.current_innings || 1;
+      const rebuiltInnings =
+        undoneBall && Number(undoneBall.innings) < currentInnings && getCurrentInningsBalls(active, currentInnings).length === 0
+          ? Number(undoneBall.innings)
+          : currentInnings;
+      const score1 = getCurrentScore(active, 1);
+      const wickets1 = getCurrentWickets(active, 1);
+      const score2 = getCurrentScore(active, 2);
+      const wickets2 = getCurrentWickets(active, 2);
+      const currentOutPlayers = getOutPlayersForInnings(active, rebuiltInnings);
+
       await supabase.from('match_players').update({
         runs_scored: 0, balls_faced: 0, fours: 0, sixes: 0,
         runs_conceded: 0, balls_bowled: 0, wickets_taken: 0,
         is_out: false
       }).eq('match_id', matchUuid);
 
-      let s1 = 0, w1 = 0, s2 = 0, w2 = 0;
       const pStats: Record<string, any> = {};
 
-      balls.forEach(b => {
-        const runs = (b.runs || 0) + (b.extras || 0);
-        if (b.innings === 1) { s1 += runs; if (b.is_wicket) w1++; }
-        else if (b.innings === 2) { s2 += runs; if (b.is_wicket) w2++; }
-        // Innings 3 & 4 (Super Over) are NOT stored in match columns, derived from balls instead.
-
+      active.forEach(b => {
         const pName = b.batter;
         const bName = b.bowler;
-        const dName = b.dismissed_player;
+        const dName = b.dismissed_player || (b.is_wicket ? b.batter : null);
 
         if (pName) {
           if (!pStats[pName]) pStats[pName] = { runs_scored: 0, balls_faced: 0, fours: 0, sixes: 0, is_out: false, runs_conceded: 0, balls_bowled: 0, wickets_taken: 0 };
           const isLegal = b.is_legal !== false;
-          const isByeOrLegBye = b.extra_type === 'bye' || b.extra_type === 'legbye';
-          let runsToBatter = b.runs;
-          if (isByeOrLegBye || !isLegal) runsToBatter = 0;
+          const runsToBatter = getRunsToBatter({ r: Number(b.runs || 0), type: b.extra_type });
           pStats[pName].runs_scored += runsToBatter;
           if (isLegal) pStats[pName].balls_faced += 1;
           if (runsToBatter === 4) pStats[pName].fours += 1;
@@ -344,9 +381,7 @@ export default function PublicMatchScreen() {
         if (bName) {
           if (!pStats[bName]) pStats[bName] = { runs_scored: 0, balls_faced: 0, fours: 0, sixes: 0, is_out: false, runs_conceded: 0, balls_bowled: 0, wickets_taken: 0 };
           const isLegal = b.is_legal !== false;
-          const isByeOrLegBye = b.extra_type === 'bye' || b.extra_type === 'legbye';
-          let runsToBowler = (b.runs || 0) + (b.extras || 0);
-          if (isByeOrLegBye) runsToBowler = 0;
+          const runsToBowler = getRunsToBowler({ r: Number(b.runs || 0), e: Number(b.extras || 0), type: b.extra_type });
           pStats[bName].runs_conceded += runsToBowler;
           if (isLegal) pStats[bName].balls_bowled += 1;
           if (b.is_wicket && b.wicket_type !== 'runout') pStats[bName].wickets_taken += 1;
@@ -362,19 +397,16 @@ export default function PublicMatchScreen() {
         await supabase.from('match_players').update(pStats[pName]).eq('match_id', matchUuid).eq('player_name', pName);
       }
 
-      const lastB = balls[balls.length - 1];
-      const outPlayers = balls
-        .filter((b) => b.is_wicket)
-        .map((b) => b.dismissed_player || b.batter)
-        .filter(Boolean);
       const updates: any = {
-        score1: s1, wickets1: w1, score2: s2, wickets2: w2,
+        score1, wickets1, score2, wickets2,
         winner: null,
-        striker: lastB?.batter || null,
-        non_striker: match?.non_striker || null,
-        current_bowler: lastB?.bowler || null,
-        out_players: outPlayers,
-        match_state: balls.length > 0 ? 'live' : 'setup'
+        current_innings: rebuiltInnings,
+        target: rebuiltInnings >= 2 ? score1 + 1 : null,
+        striker: null,
+        non_striker: null,
+        current_bowler: null,
+        out_players: currentOutPlayers,
+        match_state: getCurrentInningsBalls(active, rebuiltInnings).length > 0 ? 'live' : 'setup'
       };
       await updateMatchStats(updates);
       fetchMatch();
@@ -388,43 +420,57 @@ export default function PublicMatchScreen() {
     const undo = async () => {
       setIsSubmitting(true);
       try {
-        const { data: lastBall } = await supabase
+        const { data: ballsBeforeUndo } = await supabase
           .from('balls')
           .select('*')
           .eq('match_id', matchUuid)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (lastBall) {
-          const { error: deleteError } = await supabase.from('balls').delete().eq('id', lastBall.id);
-          if (deleteError) throw deleteError;
-
-          const { data: balls } = await supabase
-            .from('balls')
-            .select('*')
-            .eq('match_id', matchUuid)
-            .order('created_at', { ascending: true });
-          await recalculateMatchState(balls || []);
-          await updateMatchStats({
-            striker: lastBall.batter || match?.striker || null,
-            non_striker: match?.non_striker || null,
-            current_bowler: lastBall.bowler || match?.current_bowler || null,
-            match_state: (balls || []).length > 0 ? 'live' : 'setup',
-          });
-          await fetchBalls(matchUuid, match.current_innings || 1);
+          .order('created_at', { ascending: true });
+        const undoWindow = getActiveBalls(ballsBeforeUndo || []).slice(-6);
+        if (!undoWindow.length) {
+          setErrorMessage('You can only undo within the last 6 balls of this innings.');
+          return;
         }
+        const lastBall = undoWindow[undoWindow.length - 1];
+        const { error: updateError } = await supabase.from('balls').update({
+          commentary_text: buildEditedCommentary(lastBall),
+          ball: Number(lastBall.ball || 0) + 1000 + undoWindow.length,
+        }).eq('id', lastBall.id);
+        if (updateError) throw updateError;
+
+        const { data: balls } = await supabase
+          .from('balls')
+          .select('*')
+          .eq('match_id', matchUuid)
+          .order('created_at', { ascending: true });
+        await recalculateMatchState(balls || [], lastBall);
+        const rebuiltInnings =
+          Number(lastBall.innings) < (match.current_innings || 1) && getCurrentInningsBalls(getActiveBalls(balls || []), match.current_innings || 1).length === 0
+            ? Number(lastBall.innings)
+            : match.current_innings || 1;
+        const legalAfterUndo = getCurrentLegalBallCount(balls || [], rebuiltInnings);
+        if (canAutoRestoreAfterUndo(lastBall, rebuiltInnings, match.match_state)) {
+          const restored = restoreStrikeAfterUndo(match.striker || null, match.non_striker || null, lastBall, legalAfterUndo);
+          await updateMatchStats({
+            striker: restored.striker,
+            non_striker: restored.nonStriker,
+            current_bowler: lastBall.bowler || null,
+            match_state: 'live',
+          });
+        } else {
+          openSelectionModal('initial');
+        }
+        await fetchBalls(matchUuid, rebuiltInnings);
       } catch (e) { console.error(e); }
       finally { setIsSubmitting(false); }
     };
 
     if (Platform.OS === 'web') {
-      if (!window.confirm('Delete last ball and recalculate?')) return;
+      if (!window.confirm('Undo the latest ball? It will stay visible as edited.')) return;
       undo();
       return;
     }
 
-    Alert.alert("Undo", "Delete last ball and recalculate?", [
+    Alert.alert("Undo", "Undo the latest ball? It will stay visible as edited.", [
       { text: "Cancel", style: "cancel" },
       { text: "Undo", style: "destructive", onPress: undo }
     ]);
@@ -433,8 +479,7 @@ export default function PublicMatchScreen() {
   const handleAddBall = async (p: { r: number; e: number; type?: string; isW?: boolean; wType?: string; dismissedPlayer?: string }) => {
     if (isSubmitting || !isLive || isSpectator || isOffline) return;
     if (!match?.striker || !match?.non_striker || !match?.current_bowler) {
-      setSelectionType('initial');
-      setShowModal(true);
+      openSelectionModal('initial');
       setErrorMessage('Select striker, non-striker, and bowler before scoring.');
       return;
     }
@@ -443,7 +488,7 @@ export default function PublicMatchScreen() {
     try {
       // Pre-flight check to block duplicate insertions
       const { data: lastBall } = await supabase.from('balls').select('over, ball').eq('match_id', matchUuid).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const targetBallNum = inningsBalls.length + 1;
+      const targetBallNum = currentInningsBalls.length + 1;
       if (lastBall && lastBall.over === currentOverNum && lastBall.ball === targetBallNum) {
 
         setTimeout(() => setIsSubmitting(false), 300); // 300ms debounce
@@ -452,10 +497,10 @@ export default function PublicMatchScreen() {
 
       const isLegal = p.type !== 'wide' && p.type !== 'noball';
       const isByeOrLegBye = p.type === 'bye' || p.type === 'legbye';
-      let ballRuns = p.r, ballExtras = p.e, runsToBatter = p.r, runsToBowler = p.r + p.e;
-      if (isByeOrLegBye) { runsToBatter = 0; runsToBowler = 0; }
-      // No ball: batter gets credited for runs hit; Wide: batter gets 0
-      if (p.type === 'wide') { runsToBatter = 0; ballRuns = 0; }
+      const ballRuns = p.type === 'wide' ? 0 : p.r;
+      const ballExtras = p.e;
+      const runsToBatter = getRunsToBatter(p);
+      const runsToBowler = getRunsToBowler(p);
       const wTypeNormalized = p.wType ? p.wType.toLowerCase().replace(/\s/g, '') : null;
 
       try {
@@ -485,21 +530,23 @@ export default function PublicMatchScreen() {
 
       let nextStriker = match.striker, nextNon = match.non_striker, nextBowler = match.current_bowler;
       let lastBowler = match.last_bowler, nextState = 'live';
-      const nextOut = [...outPlayers];
-      const newScore = (match[scoreField] || 0) + ballRuns + ballExtras;
-      const newWickets = (match[wicketsField] || 0) + (p.isW ? 1 : 0);
-      let physicalRuns = isByeOrLegBye ? p.e : p.r;
+      const dismissedPlayer = p.dismissedPlayer || match.striker;
+      const nextOut = p.isW ? Array.from(new Set([...outPlayers, dismissedPlayer])) : [...outPlayers];
+      const newScore = currentScore + ballRuns + ballExtras;
+      const newWickets = currentWickets + (p.isW ? 1 : 0);
+      const physicalRuns = getPhysicalRuns(p);
+      const newTotalLegal = totalLegalBalls + (isLegal ? 1 : 0);
+      const inningsFinished = newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : maxWickets);
+      const remainingBatters = battingTeamPlayers.filter((player) => !nextOut.includes(player));
 
       if (p.isW) {
-        nextOut.push(p.dismissedPlayer || match.striker);
-        nextState = 'wicket_fall';
-        if (p.dismissedPlayer === match.striker) nextStriker = null;
-        if (p.dismissedPlayer === match.non_striker) nextNon = null;
+        if (!inningsFinished && remainingBatters.length > 0) nextState = 'wicket_fall';
+        if (dismissedPlayer === match.striker) nextStriker = null;
+        if (dismissedPlayer === match.non_striker) nextNon = null;
       } else if (physicalRuns % 2 !== 0) { [nextStriker, nextNon] = [nextNon, nextStriker]; }
 
-      const newTotalLegal = totalLegalBalls + (isLegal ? 1 : 0);
       const isOverEnd = isLegal && (newTotalLegal % 6 === 0);
-      if (isOverEnd) { [nextStriker, nextNon] = [nextNon, nextStriker]; lastBowler = nextBowler; nextBowler = null; setPendingBowlerChange(true); if (nextState !== 'wicket_fall') nextState = 'over_break'; }
+      if (isOverEnd && !inningsFinished) { [nextStriker, nextNon] = [nextNon, nextStriker]; lastBowler = nextBowler; nextBowler = null; setPendingBowlerChange(true); if (nextState !== 'wicket_fall') nextState = 'over_break'; }
 
       const isChasing = match.current_innings === 2 || match.current_innings === 4;
       let winner = match.winner, newTarget = match.target;
@@ -517,7 +564,7 @@ export default function PublicMatchScreen() {
           nextState = 'completed'; 
           winner = battingTeam; 
         }
-        else if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : maxWickets)) {
+        else if (inningsFinished) {
           if (target && newScore === target - 1) {
             if (match.current_innings === 2 && match.allow_super_over) {
               nextState = 'super_over_setup';
@@ -531,7 +578,7 @@ export default function PublicMatchScreen() {
           }
         }
       } else {
-        if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : maxWickets)) { 
+        if (inningsFinished) { 
           nextState = isSuperOver ? 'super_over_break' : 'innings_break'; 
           newTarget = newScore + 1; 
         }
@@ -573,10 +620,10 @@ export default function PublicMatchScreen() {
       await updateMatchStats(updates);
       if (matchUuid) await fetchBalls(matchUuid, match.current_innings);
 
-      if (nextState === 'innings_break') { setSelectionType('initial'); setShowModal(true); }
-      else if (nextState === 'wicket_fall') { setSelectionType('batter'); setShowModal(true); }
-      else if (nextState === 'over_break') { setSelectionType('bowler'); setShowModal(true); }
-      else if (nextState === 'super_over_setup' || nextState === 'super_over_break') { setSelectionType('initial'); setShowModal(true); }
+      if (nextState === 'innings_break') { openSelectionModal('initial'); }
+      else if (nextState === 'wicket_fall') { openSelectionModal('batter'); }
+      else if (nextState === 'over_break') { openSelectionModal('bowler'); }
+      else if (nextState === 'super_over_setup' || nextState === 'super_over_break') { openSelectionModal('initial'); }
       
       setTimeout(() => setIsSubmitting(false), 300); // 300ms debounce
     } catch(e: any) { 
@@ -678,9 +725,9 @@ export default function PublicMatchScreen() {
               pendingExtraType === 'noball' ? 'RUNS OFF NO BALL' : 
               pendingExtraType === 'wide' ? 'EXTRA WIDE RUNS' : 'BYES'
             }</Text>
-            <View style={{ flexDirection: 'row', gap: 24, justifyContent: 'center', marginTop: 24, marginBottom: 16, flexWrap: 'wrap' }}>
-              {[0, 1, 2, 3, 4, 6].map(n => (
-                <TouchableOpacity key={n} style={[s.controlBtn, { flex: 0, width: 72, height: 72 }]} onPress={() => {
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 24, marginBottom: 16, flexWrap: 'wrap' }}>
+              {getExtraRunOptions(pendingExtraType).map(n => (
+                <TouchableOpacity key={n} style={[s.controlBtn, { flex: 0, width: 72, height: 72, margin: 8 }]} onPress={() => {
                   setShowExtraPicker(false);
                   if (pendingExtraType === 'noball') {
                     handleAddBall({ r: n, e: match?.rules?.noBallExtraRun !== false ? 1 : 0, type: 'noball' });
@@ -853,13 +900,6 @@ export default function PublicMatchScreen() {
                   <Ionicons name={match.match_state === 'paused' ? "play" : "pause"} size={18} color={COLORS.text} />
                   <Text style={s.hostBtnText}>{match.match_state === 'paused' ? "Resume" : "Pause"}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[s.hostBtn, { borderColor: '#FEE2E2' }]} 
-                  onPress={handleUndo}
-                >
-                  <Ionicons name="refresh-outline" size={18} color="#EF4444" />
-                  <Text style={[s.hostBtnText, { color: '#EF4444' }]}>Undo Ball</Text>
-                </TouchableOpacity>
               </View>
             )}
           </>
@@ -879,20 +919,50 @@ export default function PublicMatchScreen() {
               return (
                 <Card key={inningsNum} style={{ padding: 16 }}>
                   <Text style={{ fontSize: 16, fontWeight: '800', marginBottom: 12, color: COLORS.primary }}>{team} Innings</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    <View style={s.overStrip}>
+                      {Object.entries(
+                        inningsBalls
+                          .filter((ball: any) => Number(ball.innings) === inningsNum)
+                          .reduce((acc: Record<number, any[]>, ball: any) => {
+                            const over = Number(ball.over || 0);
+                            if (!acc[over]) acc[over] = [];
+                            acc[over].push(ball);
+                            return acc;
+                          }, {})
+                      ).map(([over, balls]) => (
+                        <View key={`score-over-${inningsNum}-${over}`} style={s.overCard}>
+                          <Text style={s.overCardTitle}>Over {Number(over) + 1}</Text>
+                          <View style={s.ballPillRow}>
+                            {(balls as any[]).map((ball) => (
+                              <View key={ball.id} style={[s.ballPill, ball.is_wicket && s.ballPillWicket, isEditedBall(ball) && s.ballPillEdited]}>
+                                <Text style={[s.ballPillText, ball.is_wicket && s.ballPillTextLight]}>{getBallResultLabel(ball)}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
                   
                   {/* Batting */}
                   <View style={s.tableHeader}>
-                    <Text style={[s.colName, s.colHeader]}>Batter</Text>
-                    <Text style={[s.colNum, s.colHeader]}>R</Text>
-                    <Text style={[s.colNum, s.colHeader]}>B</Text>
-                    <Text style={[s.colNum, s.colHeader]}>4s</Text>
-                    <Text style={[s.colNum, s.colHeader]}>6s</Text>
-                    <Text style={[s.colNum, s.colHeader, {flex: 1.5}]}>SR</Text>
+                    <Text style={[s.colName, s.colHeader, {fontWeight: '900', color: '#111827'}]}>Batter</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>R</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>B</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>4s</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>6s</Text>
+                    <Text style={[s.colNum, s.colHeader, {flex: 1.5, fontWeight: '900', color: '#111827'}]}>SR</Text>
                   </View>
-                  {batters.map((b, i) => (
-                    <View key={i} style={s.tableRow}>
+                  {batters.map((b, i) => {
+                    const isStriker = b.player_name === match?.striker;
+                    const isNonStriker = b.player_name === match?.non_striker;
+                    return (
+                    <View key={i} style={[s.tableRow, isStriker && {backgroundColor: '#ECFDF5', paddingHorizontal: 4, borderRadius: 4}]}>
                       <View style={s.colName}>
-                        <Text style={{fontWeight: '600'}} numberOfLines={1}>{b.player_name}</Text>
+                        <Text style={{fontWeight: isStriker ? '900' : '600', color: isStriker ? '#047857' : '#111827'}} numberOfLines={1}>
+                          {b.player_name} {isStriker ? '🏏' : isNonStriker ? '🏃' : ''}
+                        </Text>
                         <Text style={s.outStr}>{b.is_out ? 'out' : 'not out'}</Text>
                       </View>
                       <Text style={[s.colNum, {fontWeight: '700'}]}>{b.runs_scored}</Text>
@@ -901,16 +971,16 @@ export default function PublicMatchScreen() {
                       <Text style={s.colNum}>{b.sixes || 0}</Text>
                       <Text style={[s.colNum, {flex: 1.5}]}>{b.balls_faced > 0 ? ((b.runs_scored / b.balls_faced) * 100).toFixed(1) : '0.0'}</Text>
                     </View>
-                  ))}
+                  )})}
 
                   {/* Bowling */}
                   <View style={[s.tableHeader, { marginTop: 16 }]}>
-                    <Text style={[s.colName, s.colHeader]}>Bowler</Text>
-                    <Text style={[s.colNum, s.colHeader]}>O</Text>
-                    <Text style={[s.colNum, s.colHeader]}>M</Text>
-                    <Text style={[s.colNum, s.colHeader]}>R</Text>
-                    <Text style={[s.colNum, s.colHeader]}>W</Text>
-                    <Text style={[s.colNum, s.colHeader, {flex: 1.5}]}>Econ</Text>
+                    <Text style={[s.colName, s.colHeader, {fontWeight: '900', color: '#111827'}]}>Bowler</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>O</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>M</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>R</Text>
+                    <Text style={[s.colNum, s.colHeader, {fontWeight: '900', color: '#111827'}]}>W</Text>
+                    <Text style={[s.colNum, s.colHeader, {flex: 1.5, fontWeight: '900', color: '#111827'}]}>Econ</Text>
                   </View>
                   {bowlers.map((b, i) => {
                     const overs = Math.floor(b.balls_bowled / 6) + (b.balls_bowled % 6) / 10;
@@ -937,11 +1007,19 @@ export default function PublicMatchScreen() {
               <Text style={s.emptyText}>No commentary available yet.</Text>
             ) : (
               Object.entries(
-                [...inningsBalls].reverse().reduce((acc, ball) => {
-                  if (!acc[ball.over]) acc[ball.over] = [];
-                  acc[ball.over].push(ball);
-                  return acc;
-                }, {} as Record<number, any[]>)
+                (() => {
+                  const legalCounts: Record<number, number> = {};
+                  const mappedBalls = inningsBalls.map(ball => {
+                    if (!legalCounts[ball.over]) legalCounts[ball.over] = 0;
+                    if (ball.is_legal) legalCounts[ball.over] += 1;
+                    return { ...ball, displayBall: legalCounts[ball.over] };
+                  });
+                  return [...mappedBalls].reverse().reduce((acc, ball) => {
+                    if (!acc[ball.over]) acc[ball.over] = [];
+                    acc[ball.over].push(ball);
+                    return acc;
+                  }, {} as Record<number, any[]>);
+                })()
               )
               .sort(([a], [b]) => Number(b) - Number(a))
               .map(([overNum, ballsInOver]) => {
@@ -955,7 +1033,7 @@ export default function PublicMatchScreen() {
                     </Text>
                   </View>
                   {typedBalls.map((ball: any, i: number) => {
-                    const overStr = `${ball.over}.${ball.ball}`;
+                    const overStr = `${ball.over}.${ball.displayBall}`;
                     let eventText = `${ball.bowler} to ${ball.batter}`;
                     let runText = ball.runs > 0 ? `${ball.runs} runs` : 'no run';
                     let highlightStyle = {};
@@ -1217,6 +1295,10 @@ const s = StyleSheet.create({
   scoreText: { color: COLORS.white, fontSize: 48, fontWeight: '900', textAlign: 'center' },
   overText: { color: COLORS.white, fontSize: 16, textAlign: 'center', marginTop: 8, opacity: 0.9, fontWeight: '700' },
   playersRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, gap: 12 },
+  playerCol: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: BORDER_RADIUS.lg, padding: 12 },
+  playerRole: { color: COLORS.white, opacity: 0.65, fontSize: 10, fontWeight: '800', marginBottom: 6, letterSpacing: 0.6 },
+  playerName: { color: COLORS.white, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  playerStats: { color: COLORS.white, opacity: 0.78, fontSize: 11, fontWeight: '700', marginTop: 4 },
   playerBox: { flex: 1, alignItems: 'center' },
   pLabel: { color: COLORS.white, opacity: 0.6, fontSize: 10, fontWeight: '800', marginBottom: 4 },
   pName: { color: COLORS.white, fontSize: 12, fontWeight: '800', textAlign: 'center' },
@@ -1252,6 +1334,15 @@ const s = StyleSheet.create({
   tabBtnActive: { backgroundColor: COLORS.white, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
   tabText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
   tabTextActive: { color: COLORS.primary, fontWeight: '800' },
+  overStrip: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
+  overCard: { minWidth: 132, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 10 },
+  overCardTitle: { fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, textTransform: 'uppercase' },
+  ballPillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  ballPill: { minWidth: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  ballPillWicket: { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
+  ballPillEdited: { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' },
+  ballPillText: { fontSize: 10, fontWeight: '900', color: COLORS.text },
+  ballPillTextLight: { color: COLORS.white },
   tableHeader: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: '#F8FAFC' },
   tableRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border, alignItems: 'center' },
   colName: { flex: 3 },

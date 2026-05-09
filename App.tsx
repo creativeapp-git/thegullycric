@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './src/services/supabase';
 import { Platform, View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { PWAProvider } from './src/context/PWAContext';
 import { NotificationProvider } from './src/context/NotificationContext';
@@ -156,32 +157,30 @@ export default function App() {
 
   if (initState.status === 'loading') {
     return (
-      <View style={styles.center}>
-        <Text style={styles.splashEmoji}>🏏</Text>
-        <ActivityIndicator size="large" color="#38BDF8" style={{ marginTop: 24 }} />
-        <Text style={styles.splashText}>Loading GullyCric...</Text>
-      </View>
+      <LinearGradient colors={['#0F1E35', '#0D1117'] as any} style={styles.center}>
+        <View style={styles.splashIconRing}>
+          <Ionicons name="trophy" size={40} color="#00E676" />
+        </View>
+        <Text style={styles.splashBrand}>Gully<Text style={{ color: '#00E676' }}>Cric</Text></Text>
+        <ActivityIndicator size="large" color="#00E676" style={{ marginTop: 32 }} />
+        <Text style={styles.splashText}>Loading your match feed…</Text>
+      </LinearGradient>
     );
   }
 
   if (initState.status === 'error') {
     return (
-      <View style={styles.center}>
-        <Ionicons name="wifi-outline" size={52} color="#EF4444" />
+      <LinearGradient colors={['#0F1E35', '#0D1117'] as any} style={styles.center}>
+        <Ionicons name="wifi-outline" size={52} color="#FF5252" />
         <Text style={styles.errorTitle}>Connection Problem</Text>
         <Text style={styles.errorMsg}>{initState.message}</Text>
         {initState.retryable && (
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={() => {
-              if (user) {
-                checkProfile(user.id);
-                return;
-              }
-
+              if (user) { checkProfile(user.id); return; }
               setInitState({ status: 'loading' });
-              supabase.auth
-                .getSession()
+              supabase.auth.getSession()
                 .then(({ data: { session } }) => {
                   if (session?.user) checkProfile(session.user.id);
                   else setInitState({ status: 'ready' });
@@ -192,7 +191,7 @@ export default function App() {
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </LinearGradient>
     );
   }
 
@@ -219,9 +218,9 @@ export default function App() {
     <ProfileRefreshContext.Provider value={refreshProfile}>
       <PWAProvider>
         <NotificationProvider>
-          <NavigationContainer linking={linking} fallback={<ActivityIndicator size="large" color="#38BDF8" />}>
+          <NavigationContainer linking={linking} fallback={<ActivityIndicator size="large" color="#00E676" />}>
             <AppNavigator user={user} hasProfile={hasProfile} />
-            <StatusBar style="auto" />
+            <StatusBar style="light" />
           </NavigationContainer>
         </NotificationProvider>
       </PWAProvider>
@@ -234,36 +233,44 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0D1117',
     padding: 32,
   },
-  splashEmoji: { fontSize: 64 },
+  splashIconRing: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    borderWidth: 1.5, borderColor: 'rgba(0,230,118,0.3)',
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 20,
+  },
+  splashBrand: { fontSize: 32, fontWeight: '900', color: '#F1F5F9', letterSpacing: -0.5 },
   splashText: {
     marginTop: 16,
-    color: '#64748B',
+    color: '#475569',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
   errorTitle: {
     marginTop: 16,
-    color: '#111827',
-    fontWeight: '800',
+    color: '#F1F5F9',
+    fontWeight: '900',
     fontSize: 20,
     textAlign: 'center',
   },
   errorMsg: {
     marginTop: 8,
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
   },
   retryBtn: {
     marginTop: 28,
-    backgroundColor: '#38BDF8',
+    backgroundColor: '#00E676',
     paddingHorizontal: 36,
     paddingVertical: 14,
     borderRadius: 14,
   },
-  retryText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  retryText: { color: '#000', fontWeight: '900', fontSize: 16 },
 });

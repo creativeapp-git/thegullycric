@@ -4,6 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { COLORS } from '../theme';
 
 interface StatsResponse {
   summary: {
@@ -16,9 +17,11 @@ interface StatsResponse {
   batting: Array<{
     name: string; runs: number; balls: number; fours: number; sixes: number; 
     strike_rate: number; is_out: boolean; dismissal: string;
+    dots?: number; ones?: number; twos?: number; threes?: number;
   }>;
   bowling: Array<{
     name: string; balls: number; runs_conceded: number; wickets: number; economy: number;
+    legalBalls?: number; runs?: number; dots?: number;
   }>;
 }
 

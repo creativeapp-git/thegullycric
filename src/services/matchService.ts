@@ -136,8 +136,8 @@ export const updateMatch = async (matchId: string, updates: Partial<Match>) => {
     if ('tossWinner' in updates) dbUpdates.toss_winner = updates.tossWinner;
     if ('tossDecision' in updates) dbUpdates.toss_decision = updates.tossDecision;
     if ('currentInnings' in updates) dbUpdates.current_innings = updates.currentInnings;
+    if ('status' in updates) dbUpdates.match_state = updates.status === 'Live' ? 'live' : updates.status === 'Completed' ? 'completed' : 'setup';
     
-    // clean up camelCase keys
     delete dbUpdates.matchId;
     delete dbUpdates.team1Logo;
     delete dbUpdates.team2Logo;
@@ -147,6 +147,7 @@ export const updateMatch = async (matchId: string, updates: Partial<Match>) => {
     delete dbUpdates.tossWinner;
     delete dbUpdates.tossDecision;
     delete dbUpdates.currentInnings;
+    delete dbUpdates.status;
 
     const { error } = await supabase
       .from('matches')

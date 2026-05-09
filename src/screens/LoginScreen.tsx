@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithUsernameOrEmail, signInWithGoogleWeb } from '../services/authService';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../theme';
 
 const LoginScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
@@ -11,6 +12,7 @@ const LoginScreen = () => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
   const handleLogin = async () => {
@@ -46,7 +48,6 @@ const LoginScreen = () => {
       Alert.alert('Notice', 'Google Sign-In is currently only supported on the web version.');
       return;
     }
-    
     setLoading(true);
     try {
       await signInWithGoogleWeb();
@@ -73,41 +74,44 @@ const LoginScreen = () => {
         <View style={styles.logoCircle}>
           <Image source={require('../../assets/app-logo.png')} style={styles.logoImage} resizeMode="contain" />
         </View>
-        <Text style={styles.title}>Welcome Back!</Text>
+        <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue scoring</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.label}>Email or Username</Text>
         <View style={styles.inputWrapper}>
-          <Ionicons name="mail-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+          <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
           <TextInput
             style={styles.inputField}
             placeholder="john@example.com"
             value={identifier}
             onChangeText={setIdentifier}
             autoCapitalize="none"
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={COLORS.textMuted}
           />
         </View>
 
         <Text style={styles.label}>Password</Text>
         <View style={styles.inputWrapper}>
-          <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+          <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
           <TextInput
             style={styles.inputField}
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
-            placeholderTextColor="#9CA3AF"
+            secureTextEntry={!showPassword}
+            placeholderTextColor={COLORS.textMuted}
           />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.linksRow}>
           <TouchableOpacity style={styles.checkboxContainer} onPress={() => setRememberMe(!rememberMe)}>
             <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-              {rememberMe && <Ionicons name="checkmark" size={14} color="#FFF" />}
+              {rememberMe && <Ionicons name="checkmark" size={14} color={COLORS.white} />}
             </View>
             <Text style={styles.linkText}>Remember me</Text>
           </TouchableOpacity>
@@ -123,7 +127,7 @@ const LoginScreen = () => {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={COLORS.white} />
         ) : (
           <Text style={styles.buttonText}>Log In</Text>
         )}
@@ -140,7 +144,7 @@ const LoginScreen = () => {
         onPress={handleGoogleLogin}
         disabled={loading}
       >
-        <Ionicons name="logo-google" size={20} color="#1F2937" style={styles.googleIcon} />
+        <Ionicons name="logo-google" size={20} color={COLORS.text} style={styles.googleIcon} />
         <Text style={styles.googleButtonText}>Continue with Google</Text>
       </TouchableOpacity>
 
@@ -164,39 +168,36 @@ const LoginScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  content: { flex: 1, padding: 24, justifyContent: 'center' },
-  headerSection: { alignItems: 'center', marginBottom: 40 },
-  logoCircle: { width: 100, height: 100, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  content: { flex: 1, padding: SPACING.xl, justifyContent: 'center' },
+  headerSection: { alignItems: 'center', marginBottom: SPACING.xxl },
+  logoCircle: { width: 100, height: 100, borderRadius: BORDER_RADIUS.lg, backgroundColor: COLORS.cardElevated, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.medium },
   logoImage: { width: 70, height: 70 },
-  title: { fontSize: 32, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, color: '#6B7280', marginTop: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, marginBottom: 24 },
-  label: { fontSize: 15, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 16 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingHorizontal: 16 },
-  inputIcon: { marginRight: 12 },
-  inputField: { flex: 1, height: 56, fontSize: 16, color: '#111827' },
-  linksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 8 },
+  title: { fontSize: TYPOGRAPHY.sizes.xxxl, fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: TYPOGRAPHY.sizes.lg, color: COLORS.textSecondary, marginTop: SPACING.sm },
+  card: { backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.xl, padding: SPACING.xl, borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACING.xl, ...SHADOWS.medium },
+  label: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold, color: COLORS.textSecondary, marginBottom: SPACING.sm, marginTop: SPACING.md, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md, paddingHorizontal: SPACING.lg, borderWidth: 1, borderColor: COLORS.border },
+  inputIcon: { marginRight: SPACING.md },
+  inputField: { flex: 1, height: 52, fontSize: TYPOGRAPHY.sizes.md, color: COLORS.text },
+  linksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.xl, marginBottom: SPACING.sm },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center' },
-  checkbox: { width: 18, height: 18, borderRadius: 6, borderWidth: 2, borderColor: '#D1D5DB', marginRight: 8, justifyContent: 'center', alignItems: 'center' },
-  checkboxChecked: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  linkText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
-  forgotText: { color: '#10B981', fontSize: 14, fontWeight: '600' },
-  button: { backgroundColor: '#10B981', height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 4 },
+  checkbox: { width: 18, height: 18, borderRadius: 5, borderWidth: 1.5, borderColor: COLORS.border, marginRight: SPACING.sm, justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  linkText: { color: COLORS.textSecondary, fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.medium },
+  forgotText: { color: COLORS.primary, fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold },
+  button: { backgroundColor: COLORS.primary, height: 56, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', justifyContent: 'center', ...SHADOWS.glowPrimary },
   disabledButton: { opacity: 0.6 },
-  buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.5 },
-  
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-  dividerText: { color: '#9CA3AF', paddingHorizontal: 16, fontSize: 14, fontWeight: '600' },
-  
-  googleButton: { flexDirection: 'row', backgroundColor: '#FFFFFF', height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  googleIcon: { marginRight: 12 },
-  googleButtonText: { color: '#1F2937', fontSize: 16, fontWeight: '700' },
-  
-  createAccountContainer: { alignItems: 'center', paddingVertical: 12 },
-  createAccountText: { color: '#6B7280', fontSize: 15, fontWeight: '500' },
-  createAccountBold: { color: '#10B981', fontWeight: '700' },
+  buttonText: { color: COLORS.white, fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold, letterSpacing: 0.5 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.xl },
+  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.borderLight },
+  dividerText: { color: COLORS.textMuted, paddingHorizontal: SPACING.lg, fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.semibold },
+  googleButton: { flexDirection: 'row', backgroundColor: COLORS.cardElevated, height: 56, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACING.xl, ...SHADOWS.small },
+  googleIcon: { marginRight: SPACING.md },
+  googleButtonText: { color: COLORS.text, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.bold },
+  createAccountContainer: { alignItems: 'center', paddingVertical: SPACING.md },
+  createAccountText: { color: COLORS.textSecondary, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.medium },
+  createAccountBold: { color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold },
 });
 
 export default LoginScreen;

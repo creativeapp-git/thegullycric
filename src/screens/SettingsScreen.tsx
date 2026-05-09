@@ -8,7 +8,7 @@ import { getUserProfile, saveUserProfile } from '../services/userService';
 import { User } from '../types';
 import { AppNavigationProp } from '../navigation/navigation.types';
 import { usePWA } from '../context/PWAContext';
-import { SHADOWS } from '../theme';
+import { COLORS, SHADOWS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '../theme';
 
 const SUPPORT_EMAIL = 'creative.app.mail@gmail.com';
 
@@ -76,25 +76,25 @@ const SettingsScreen = () => {
 
   const renderOption = (icon: any, title: string, onPress: () => void, isDestructive = false) => (
     <TouchableOpacity style={styles.optionRow} onPress={onPress}>
-      <View style={[styles.iconContainer, isDestructive && { backgroundColor: '#FEE2E2' }]}>
-        <Ionicons name={icon} size={20} color={isDestructive ? '#EF4444' : '#10B981'} />
+      <View style={[styles.iconContainer, isDestructive && { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
+        <Ionicons name={icon} size={20} color={isDestructive ? COLORS.danger : COLORS.primary} />
       </View>
-      <Text style={[styles.optionText, isDestructive && { color: '#EF4444' }]}>{title}</Text>
-      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+      <Text style={[styles.optionText, isDestructive && { color: COLORS.danger }]}>{title}</Text>
+      <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
     </TouchableOpacity>
   );
 
   const renderToggle = (icon: any, title: string, value: boolean, onToggle: (v: boolean) => void) => (
     <View style={styles.optionRow}>
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={20} color="#10B981" />
+        <Ionicons name={icon} size={20} color={COLORS.primary} />
       </View>
       <Text style={styles.optionText}>{title}</Text>
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: '#E5E7EB', true: '#A7F3D0' }}
-        thumbColor={value ? '#10B981' : '#9CA3AF'}
+        trackColor={{ false: COLORS.border, true: 'rgba(16,185,129,0.4)' }}
+        thumbColor={value ? COLORS.primary : COLORS.textSecondary}
       />
     </View>
   );
@@ -110,7 +110,7 @@ const SettingsScreen = () => {
       >
         {/* Own Settings Header */}
         <View style={styles.settingsHeader}>
-          <Ionicons name="settings-outline" size={28} color="#111827" />
+          <Ionicons name="settings-outline" size={28} color={COLORS.primary} />
           <Text style={styles.pageTitle}>Settings</Text>
         </View>
 
@@ -139,22 +139,22 @@ const SettingsScreen = () => {
         </View>
 
         {isInstallable && !isInstalled && (
-          <View style={{ marginBottom: 24 }}>
+          <View style={{ marginBottom: SPACING.xl }}>
             <Text style={styles.sectionHeader}>App</Text>
             <TouchableOpacity 
-              style={[styles.optionsCard, { borderColor: '#10B981', borderWidth: 2, backgroundColor: '#ECFDF5' }]} 
+              style={[styles.optionsCard, { borderColor: COLORS.primary, borderWidth: 1.5, backgroundColor: 'rgba(16,185,129,0.05)' }]} 
               onPress={promptInstall}
               activeOpacity={0.8}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={[styles.iconContainer, { backgroundColor: '#D1FAE5' }]}>
-                  <Ionicons name="download-outline" size={24} color="#10B981" />
+                <View style={[styles.iconContainer, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+                  <Ionicons name="download-outline" size={24} color={COLORS.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionText, { fontWeight: '800', color: '#065F46' }]}>Install App</Text>
-                  <Text style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>Install for faster access & full-screen experience</Text>
+                  <Text style={[styles.optionText, { fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.primary }]}>Install App</Text>
+                  <Text style={{ fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.textSecondary, marginTop: 2 }}>Install for faster access & full-screen experience</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#10B981" />
+                <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
               </View>
             </TouchableOpacity>
           </View>
@@ -179,12 +179,12 @@ const SettingsScreen = () => {
 
       {/* Notification Settings Modal */}
       <Modal visible={showNotifications} transparent animationType="slide">
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end'}}>
-          <View style={{backgroundColor:'#FFF', padding:24, borderTopLeftRadius:24, borderTopRightRadius:24}}>
-            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:24}}>
-              <Text style={{fontSize:20, fontWeight:'800', color:'#111827'}}>Notification Settings</Text>
+        <View style={{flex:1, backgroundColor:'rgba(11,15,25,0.8)', justifyContent:'flex-end'}}>
+          <View style={{backgroundColor:COLORS.cardElevated, padding:SPACING.xl, borderTopLeftRadius:BORDER_RADIUS.xl, borderTopRightRadius:BORDER_RADIUS.xl, borderWidth:1, borderColor:COLORS.borderLight}}>
+            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:SPACING.xl}}>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.xl, fontWeight:TYPOGRAPHY.weights.heavy, color:COLORS.text}}>Notification Settings</Text>
               <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                <Ionicons name="close" size={24} color="#6B7280" />
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
             {renderToggle('football-outline', 'Match Updates', matchUpdates, setMatchUpdates)}
@@ -192,12 +192,12 @@ const SettingsScreen = () => {
             {renderToggle('stats-chart-outline', 'Score Alerts', scoreAlerts, setScoreAlerts)}
             <View style={styles.divider} />
             {renderToggle('megaphone-outline', 'App Updates', appUpdates, setAppUpdates)}
-            <View style={{height: 24}} />
+            <View style={{height: SPACING.xl}} />
             <TouchableOpacity
-              style={{backgroundColor:'#10B981', padding:16, borderRadius:12, alignItems:'center'}}
+              style={{backgroundColor:COLORS.primary, padding:SPACING.lg, borderRadius:BORDER_RADIUS.lg, alignItems:'center', ...SHADOWS.glowPrimary}}
               onPress={() => { showAlert('Saved', 'Notification preferences updated!'); setShowNotifications(false); }}
             >
-              <Text style={{color:'#FFF', fontWeight:'700', fontSize:16}}>Save Preferences</Text>
+              <Text style={{color:COLORS.white, fontWeight:TYPOGRAPHY.weights.bold, fontSize:TYPOGRAPHY.sizes.md}}>Save Preferences</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -205,23 +205,23 @@ const SettingsScreen = () => {
 
       {/* Terms & Privacy Modal */}
       <Modal visible={showTerms} transparent animationType="slide">
-        <View style={{flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end'}}>
-          <View style={{backgroundColor:'#FFF', padding:24, borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%'}}>
-            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
-              <Text style={{fontSize:20, fontWeight:'800', color:'#111827'}}>Terms & Privacy</Text>
+        <View style={{flex:1, backgroundColor:'rgba(11,15,25,0.8)', justifyContent:'flex-end'}}>
+          <View style={{backgroundColor:COLORS.cardElevated, padding:SPACING.xl, borderTopLeftRadius:BORDER_RADIUS.xl, borderTopRightRadius:BORDER_RADIUS.xl, maxHeight:'85%', borderWidth:1, borderColor:COLORS.borderLight}}>
+            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:SPACING.lg}}>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.xl, fontWeight:TYPOGRAPHY.weights.heavy, color:COLORS.text}}>Terms & Privacy</Text>
               <TouchableOpacity onPress={() => setShowTerms(false)}>
-                <Ionicons name="close" size={24} color="#6B7280" />
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={true} style={{flex:1}}>
-              <Text style={{fontSize:16, fontWeight:'700', color:'#111827', marginBottom:8}}>Terms of Service</Text>
-              <Text style={{fontSize:14, color:'#374151', lineHeight:22, marginBottom:16}}>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.md, fontWeight:TYPOGRAPHY.weights.bold, color:COLORS.text, marginBottom:SPACING.sm}}>Terms of Service</Text>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.sm, color:COLORS.textSecondary, lineHeight:22, marginBottom:SPACING.lg}}>
                 By using GullyCric, you agree to use the app responsibly and in accordance with applicable laws. GullyCric is a cricket scoring and management tool designed for personal and recreational use.{'\n\n'}
                 You are responsible for the accuracy of match data you enter. We reserve the right to suspend accounts that misuse our platform.{'\n\n'}
                 GullyCric is provided "as is" without warranties of any kind. We are not liable for any data loss or service interruptions.
               </Text>
-              <Text style={{fontSize:16, fontWeight:'700', color:'#111827', marginBottom:8}}>Privacy Policy</Text>
-              <Text style={{fontSize:14, color:'#374151', lineHeight:22, marginBottom:16}}>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.md, fontWeight:TYPOGRAPHY.weights.bold, color:COLORS.text, marginBottom:SPACING.sm}}>Privacy Policy</Text>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.sm, color:COLORS.textSecondary, lineHeight:22, marginBottom:SPACING.lg}}>
                 We collect minimal data necessary to provide our service:{'\n\n'}
                 • Account information (email, username, name){'\n'}
                 • Match data you create and manage{'\n'}
@@ -229,8 +229,8 @@ const SettingsScreen = () => {
                 We do not sell your data to third parties. Your match data is stored securely using Supabase infrastructure.{'\n\n'}
                 You can request account deletion by contacting us at {SUPPORT_EMAIL}.
               </Text>
-              <Text style={{fontSize:16, fontWeight:'700', color:'#111827', marginBottom:8}}>Contact Us</Text>
-              <Text style={{fontSize:14, color:'#374151', lineHeight:22, marginBottom:24}}>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.md, fontWeight:TYPOGRAPHY.weights.bold, color:COLORS.text, marginBottom:SPACING.sm}}>Contact Us</Text>
+              <Text style={{fontSize:TYPOGRAPHY.sizes.sm, color:COLORS.textSecondary, lineHeight:22, marginBottom:SPACING.xl}}>
                 For questions or concerns, email us at:{'\n'}{SUPPORT_EMAIL}
               </Text>
             </ScrollView>
@@ -242,26 +242,26 @@ const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  contentContainer: { padding: 24, paddingBottom: 40 },
-  settingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
-  pageTitle: { fontSize: 32, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  versionText: { textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 16, fontWeight: '500' },
-  profileCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 32, ...SHADOWS.soft },
-  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  avatarInitial: { fontSize: 28, fontWeight: '800', color: '#FFF' },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  contentContainer: { padding: SPACING.xl, paddingBottom: 40 },
+  settingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: SPACING.xl },
+  pageTitle: { fontSize: TYPOGRAPHY.sizes.xxxl, fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.text, letterSpacing: -0.5 },
+  versionText: { textAlign: 'center', color: COLORS.textMuted, fontSize: TYPOGRAPHY.sizes.xs, marginTop: SPACING.lg, fontWeight: TYPOGRAPHY.weights.medium },
+  profileCard: { backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.xxl, borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.medium },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.lg },
+  avatarInitial: { fontSize: TYPOGRAPHY.sizes.xxl, fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.white },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  profileUsername: { fontSize: 14, color: '#6B7280', marginBottom: 2 },
-  editButton: { backgroundColor: '#10B981', paddingVertical: 12, borderRadius: 16, alignItems: 'center' },
-  editButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  sectionHeader: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 12, marginLeft: 8 },
-  optionsCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 8, marginBottom: 24, ...SHADOWS.soft },
-  optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12 },
-  iconContainer: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  optionText: { flex: 1, fontSize: 16, fontWeight: '500', color: '#1F2937' },
-  divider: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 68 },
+  profileName: { fontSize: TYPOGRAPHY.sizes.xl, fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text, marginBottom: 4 },
+  profileUsername: { fontSize: TYPOGRAPHY.sizes.sm, color: COLORS.textSecondary, marginBottom: 2 },
+  editButton: { backgroundColor: COLORS.primary, paddingVertical: SPACING.md, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', ...SHADOWS.glowPrimary },
+  editButtonText: { color: COLORS.white, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.semibold },
+  sectionHeader: { fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.heavy, color: COLORS.textSecondary, marginBottom: SPACING.md, marginLeft: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.8 },
+  optionsCard: { backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.xl, padding: SPACING.sm, marginBottom: SPACING.xl, borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.small },
+  optionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, paddingHorizontal: SPACING.md },
+  iconContainer: { width: 40, height: 40, borderRadius: BORDER_RADIUS.md, backgroundColor: 'rgba(16,185,129,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: SPACING.lg },
+  optionText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.medium, color: COLORS.text },
+  divider: { height: 1, backgroundColor: COLORS.borderLight, marginLeft: 68 },
 });
 
 export default SettingsScreen;

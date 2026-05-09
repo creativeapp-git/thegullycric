@@ -1,230 +1,221 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { signUpWithEmail, signInWithGoogleWeb } from '../services/authService';
-import { supabase } from '../services/supabase';
 import { AppNavigationProp } from '../navigation/navigation.types';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, TYPOGRAPHY } from '../theme';
 
 const EmailSignupScreen = () => {
   const navigation = useNavigation<AppNavigationProp>();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail]                     = useState('');
+  const [password, setPassword]               = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass]               = useState(false);
+  const [showConfirm, setShowConfirm]         = useState(false);
+  const [loading, setLoading]                 = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
-
-
 
   const handleGoogleSignup = async () => {
     if (Platform.OS !== 'web') {
       Alert.alert('Notice', 'Google Sign-In is currently only supported on the web version.');
       return;
     }
-    
     setLoading(true);
-    try {
-      await signInWithGoogleWeb();
-    } catch (error: any) {
-      if (error.code !== 'auth/popup-closed-by-user') {
-        window.alert('Failed to sign up with Google. ' + error.message);
-      }
-    } finally {
-      setLoading(false);
-    }
+    try { await signInWithGoogleWeb(); }
+    catch (e: any) { if (e.code !== 'auth/popup-closed-by-user') window.alert('Failed: ' + e.message); }
+    finally { setLoading(false); }
   };
 
-  const showAlert = (title: string, message: string) => {
-    if (Platform.OS === 'web') {
-      window.alert(`${title}: ${message}`);
-    } else {
-      Alert.alert(title, message);
-    }
-  };
+  const showAlert = (title: string, message: string) =>
+    Platform.OS === 'web' ? window.alert(`${title}: ${message}`) : Alert.alert(title, message);
 
   const handleSignup = async () => {
-    if (!email || !email.includes('@')) {
-      showAlert('Error', 'Please enter a valid email address');
-      return;
-    }
-    if (password.length < 6) {
-      showAlert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      showAlert('Error', 'Passwords do not match');
-      return;
-    }
+    if (!email || !email.includes('@')) return showAlert('Error', 'Please enter a valid email address');
+    if (password.length < 6)           return showAlert('Error', 'Password must be at least 6 characters');
+    if (password !== confirmPassword)  return showAlert('Error', 'Passwords do not match');
 
     setLoading(true);
     try {
       await signUpWithEmail(email, password);
       setVerificationSent(true);
-    } catch (error: any) {
-      let msg = 'Failed to create account';
-      if (error.code === 'auth/email-already-in-use') {
-        msg = 'This email is already in use.';
-      }
-      showAlert('Error', msg);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) {
+      showAlert('Error', e.code === 'auth/email-already-in-use' ? 'This email is already in use.' : 'Failed to create account');
+    } finally { setLoading(false); }
   };
 
-
+  const InputRow = ({
+    icon, placeholder, value, onChangeText, secure, showToggle, onToggle, keyboardType
+  }: any) => (
+    <View style={s.inputWrapper}>
+      <Ionicons name={icon} size={19} color={COLORS.textMuted} style={{ marginRight: SPACING.md }} />
+      <TextInput
+        style={s.inputField}
+        placeholder={placeholder}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secure}
+        autoCapitalize="none"
+        keyboardType={keyboardType}
+        placeholderTextColor={COLORS.textMuted}
+      />
+      {showToggle && (
+        <TouchableOpacity onPress={onToggle} style={{ padding: 4 }}>
+          <Ionicons name={secure ? 'eye-outline' : 'eye-off-outline'} size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   const content = (
-    <ScrollView 
-      contentContainerStyle={styles.contentContainer}
+    <ScrollView
+      contentContainerStyle={s.scroll}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.headerSection}>
-        <View style={styles.logoCircle}>
-          <Image source={require('../../assets/app-logo.png')} style={styles.logoImage} resizeMode="contain" />
+      {/* Hero Section */}
+      <LinearGradient colors={['#0F1E35', '#0D1117'] as any} style={s.hero}>
+        <View style={s.logoWrap}>
+          <Image source={require('../../assets/app-logo.png')} style={s.logo} resizeMode="contain" />
         </View>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join the GullyCric community</Text>
-      </View>
+        <Text style={s.title}>Create Account</Text>
+        <Text style={s.subtitle}>Join the GullyCric community</Text>
+      </LinearGradient>
 
       {!verificationSent ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.label}>Email Address</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputField}
-                placeholder="john@example.com"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
+          {/* Form Card */}
+          <View style={s.card}>
+            <Text style={s.label}>Email Address</Text>
+            <InputRow icon="mail-outline" placeholder="you@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" secure={false} />
 
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputField}
-                placeholder="••••••••"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
+            <Text style={s.label}>Password</Text>
+            <InputRow icon="lock-closed-outline" placeholder="••••••••" value={password} onChangeText={setPassword} secure={!showPass} showToggle onToggle={() => setShowPass(v => !v)} />
 
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputField}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
+            <Text style={s.label}>Confirm Password</Text>
+            <InputRow icon="lock-closed-outline" placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} secure={!showConfirm} showToggle onToggle={() => setShowConfirm(v => !v)} />
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.disabledButton]}
-            onPress={handleSignup}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
-            )}
+          {/* CTA */}
+          <TouchableOpacity onPress={handleSignup} disabled={loading} style={{ borderRadius: BORDER_RADIUS.lg, overflow: 'hidden', marginBottom: SPACING.xl }}>
+            <LinearGradient colors={[COLORS.primaryDark, COLORS.primary] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.btn}>
+              {loading ? <ActivityIndicator color={COLORS.black} /> : <Text style={s.btnText}>Create Account</Text>}
+            </LinearGradient>
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
+          {/* Divider */}
+          <View style={s.dividerRow}>
+            <View style={s.dividerLine} /><Text style={s.dividerText}>OR</Text><View style={s.dividerLine} />
           </View>
 
+          {/* Google */}
           <TouchableOpacity
-            style={[styles.googleButton, loading && styles.disabledButton]}
+            style={[s.googleBtn, loading && { opacity: 0.5 }]}
             onPress={handleGoogleSignup}
             disabled={loading}
           >
-            <Ionicons name="logo-google" size={20} color="#1F2937" style={styles.googleIcon} />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            <Ionicons name="logo-google" size={19} color={COLORS.text} style={{ marginRight: SPACING.md }} />
+            <Text style={s.googleBtnText}>Continue with Google</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.createAccountContainer} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.createAccountText}>Already have an account? <Text style={styles.createAccountBold}>Log In</Text></Text>
+          {/* Login link */}
+          <TouchableOpacity style={s.linkRow} onPress={() => navigation.navigate('Login')}>
+            <Text style={s.linkText}>Already have an account?{' '}<Text style={s.linkBold}>Log In</Text></Text>
           </TouchableOpacity>
         </>
       ) : (
-        <View style={[styles.card, { alignItems: 'center', paddingVertical: 40 }]}>
-          <View style={[styles.iconCircle, { width: 100, height: 100, borderRadius: 50, marginBottom: 24 }]}>
-            <Ionicons name="mail-open" size={48} color="#10B981" />
+        /* Verification sent */
+        <View style={[s.card, { alignItems: 'center', paddingVertical: SPACING.xxxl }]}>
+          <View style={s.verifyIconRing}>
+            <Ionicons name="mail-open-outline" size={44} color={COLORS.primary} />
           </View>
-          <Text style={[styles.title, { fontSize: 24, marginBottom: 16 }]}>Verify Your Email</Text>
-          <Text style={styles.verificationText}>
-            We've sent a secure link to <Text style={{fontWeight: '700', color: '#111827'}}>{email}</Text>. 
-            Please check your inbox and click the link to verify your account.
+          <Text style={s.verifyTitle}>Verify Your Email</Text>
+          <Text style={s.verifyBody}>
+            We've sent a secure link to{' '}
+            <Text style={{ fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text }}>{email}</Text>.{'\n'}
+            Check your inbox to activate your account.
           </Text>
-          
-          <ActivityIndicator color="#10B981" size="large" style={{ marginVertical: 32 }} />
-
+          <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: SPACING.xl }} />
         </View>
       )}
     </ScrollView>
   );
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
+    <View style={[s.root, Platform.OS === 'web' && { height: '100vh' as any, overflow: 'hidden' as any }]}>
       {Platform.OS === 'ios' ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-          {content}
-        </KeyboardAvoidingView>
-      ) : (
-        content
-      )}
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">{content}</KeyboardAvoidingView>
+      ) : content}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  contentContainer: { padding: 24, paddingBottom: 60, flexGrow: 1, justifyContent: 'center' },
-  headerSection: { alignItems: 'center', marginBottom: 40 },
-  logoCircle: { width: 100, height: 100, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
-  logoImage: { width: 70, height: 70 },
-  title: { fontSize: 32, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, color: '#6B7280', marginTop: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2, marginBottom: 24 },
-  label: { fontSize: 15, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 16 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, paddingHorizontal: 16 },
-  inputIcon: { marginRight: 12 },
-  inputField: { flex: 1, height: 56, fontSize: 16, color: '#111827' },
-  button: { backgroundColor: '#10B981', height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 4 },
-  disabledButton: { opacity: 0.6 },
-  buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.5 },
-  
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-  dividerText: { color: '#9CA3AF', paddingHorizontal: 16, fontSize: 14, fontWeight: '600' },
-  
-  googleButton: { flexDirection: 'row', backgroundColor: '#FFFFFF', height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  googleIcon: { marginRight: 12 },
-  googleButtonText: { color: '#1F2937', fontSize: 16, fontWeight: '700' },
-  
-  secondaryButton: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, backgroundColor: '#F3F4F6' },
-  secondaryButtonText: { color: '#4B5563', fontSize: 16, fontWeight: '600' },
-  createAccountContainer: { alignItems: 'center', paddingVertical: 12 },
-  createAccountText: { color: '#6B7280', fontSize: 15, fontWeight: '500' },
-  createAccountBold: { color: '#10B981', fontWeight: '700' },
-  iconCircle: { backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' },
-  verificationText: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 24, paddingHorizontal: 16 },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { flexGrow: 1, paddingBottom: 60 },
+
+  // Hero
+  hero: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xxxl, paddingBottom: SPACING.xxl, alignItems: 'center' },
+  logoWrap: {
+    width: 88, height: 88, borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: COLORS.cardElevated, justifyContent: 'center', alignItems: 'center',
+    marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.borderLight,
+    ...SHADOWS.medium,
+  },
+  logo: { width: 64, height: 64 },
+  title: { fontSize: TYPOGRAPHY.sizes.xxxl, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.text, letterSpacing: -0.5 },
+  subtitle: { fontSize: TYPOGRAPHY.sizes.md, color: COLORS.textSecondary, marginTop: SPACING.sm },
+
+  // Card
+  card: {
+    backgroundColor: COLORS.cardElevated,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.xl,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.xl,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    ...SHADOWS.medium,
+  },
+  label: {
+    fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.black,
+    color: COLORS.textSecondary, marginBottom: SPACING.sm, marginTop: SPACING.lg,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+  },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.card, borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.lg, borderWidth: 1, borderColor: COLORS.border,
+    marginBottom: 4,
+  },
+  inputField: { flex: 1, height: 52, fontSize: TYPOGRAPHY.sizes.md, color: COLORS.text },
+
+  // Buttons
+  btn: { height: 56, justifyContent: 'center', alignItems: 'center', ...SHADOWS.glowPrimary },
+  btnText: { color: COLORS.black, fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.black, letterSpacing: 0.5 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: SPACING.lg, marginBottom: SPACING.xl },
+  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.borderLight },
+  dividerText: { color: COLORS.textMuted, paddingHorizontal: SPACING.lg, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.semibold },
+  googleBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 56, marginHorizontal: SPACING.lg, marginBottom: SPACING.xl,
+    backgroundColor: COLORS.cardElevated, borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.borderLight, ...SHADOWS.small,
+  },
+  googleBtnText: { color: COLORS.text, fontSize: TYPOGRAPHY.sizes.md, fontWeight: TYPOGRAPHY.weights.bold },
+  linkRow: { alignItems: 'center', paddingVertical: SPACING.md },
+  linkText: { color: COLORS.textSecondary, fontSize: TYPOGRAPHY.sizes.md },
+  linkBold: { color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold },
+
+  // Verification
+  verifyIconRing: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: 'rgba(0,230,118,0.08)', borderWidth: 1.5,
+    borderColor: 'rgba(0,230,118,0.25)', justifyContent: 'center',
+    alignItems: 'center', marginBottom: SPACING.xl,
+  },
+  verifyTitle: { fontSize: TYPOGRAPHY.sizes.xxl, fontWeight: TYPOGRAPHY.weights.black, color: COLORS.text, marginBottom: SPACING.md },
+  verifyBody: { fontSize: TYPOGRAPHY.sizes.md, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 24, paddingHorizontal: SPACING.md },
 });
 
 export default EmailSignupScreen;

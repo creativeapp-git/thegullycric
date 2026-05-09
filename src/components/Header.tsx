@@ -1,26 +1,39 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Platform, TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING } from '../theme';
+import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../theme';
 
 /**
- * Static app header — memoized so it never re-renders on parent state changes.
- * Uses TouchableOpacity from react-native (not gesture-handler) to avoid
- * the import-after-use bug that existed before.
+ * GullyCric App Header v2 — gradient background, glass notification button
  */
 const Header = React.memo(() => (
   <SafeAreaView style={styles.safeArea}>
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.iconBg}>
-          <Ionicons name="trophy" size={20} color={COLORS.white} />
+    <LinearGradient
+      colors={['#0F1E35', '#0D1117'] as any}
+      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+      style={styles.container}
+    >
+      <View style={styles.logoRow}>
+        <LinearGradient
+          colors={[COLORS.primaryDark, COLORS.primary] as any}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.iconBg}
+        >
+          <Ionicons name="trophy" size={18} color={COLORS.black} />
+        </LinearGradient>
+        <View>
+          <Text style={styles.title}>
+            Gully<Text style={styles.titleAccent}>Cric</Text>
+          </Text>
+          <Text style={styles.tagline}>Live Scoring Platform</Text>
         </View>
-        <Text style={styles.title}>Gully<Text style={styles.titleBold}>Cric</Text></Text>
       </View>
+
       <TouchableOpacity style={styles.notifBtn} accessibilityLabel="Notifications">
-        <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
+        <Ionicons name="notifications-outline" size={19} color={COLORS.textSecondary} />
       </TouchableOpacity>
-    </View>
+    </LinearGradient>
   </SafeAreaView>
 ));
 
@@ -28,47 +41,56 @@ Header.displayName = 'Header';
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0F1E35',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.borderLight,
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    height: Platform.OS === 'ios' ? 44 : 56,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    minHeight: Platform.OS === 'ios' ? 44 : 64,
   },
-  logoContainer: {
+  logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   iconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
+    width: 36,
+    height: 36,
+    borderRadius: BORDER_RADIUS.sm,
     justifyContent: 'center',
     alignItems: 'center',
+    ...SHADOWS.glowPrimary,
   },
   title: {
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.sizes.lg,
     color: COLORS.text,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    letterSpacing: 0.2,
   },
-  titleBold: {
-    fontWeight: '800',
+  titleAccent: {
+    fontWeight: TYPOGRAPHY.weights.black,
     color: COLORS.primary,
   },
+  tagline: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    color: COLORS.textMuted,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    letterSpacing: 0.3,
+  },
   notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.card,
+    width: 38,
+    height: 38,
+    borderRadius: BORDER_RADIUS.pill,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borderGlass,
   },
 });
 

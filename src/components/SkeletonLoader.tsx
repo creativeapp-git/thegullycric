@@ -1,6 +1,39 @@
+/**
+ * GullyCric Premium SkeletonLoader v2.0
+ * Dark-themed shimmer placeholders for all load states
+ */
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Platform } from 'react-native';
+import { COLORS, BORDER_RADIUS, SPACING } from '../theme';
 
+// ── CSS shimmer for web ─────────────────────────────────────────────────────
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const id = 'gc-skeleton-shimmer';
+  if (!document.getElementById(id)) {
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      @keyframes gcShimmer {
+        0%   { background-position: -600px 0; }
+        100% { background-position:  600px 0; }
+      }
+      .gc-skeleton {
+        background: linear-gradient(
+          90deg,
+          #1C2539 25%,
+          #263347 50%,
+          #1C2539 75%
+        );
+        background-size: 1200px 100%;
+        animation: gcShimmer 1.6s ease-in-out infinite;
+        border-radius: 8px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+// ── Base shimmer block ──────────────────────────────────────────────────────
 interface SkeletonLoaderProps {
   width?: number | string;
   height?: number;
@@ -8,61 +41,28 @@ interface SkeletonLoaderProps {
   style?: any;
 }
 
-// Inject CSS shimmer animation once on web
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  const id = 'skeleton-shimmer-style';
-  if (!document.getElementById(id)) {
-    const style = document.createElement('style');
-    style.id = id;
-    style.textContent = `
-      @keyframes skeletonShimmer {
-        0% { background-position: -400px 0; }
-        100% { background-position: 400px 0; }
-      }
-      .skeleton-shimmer {
-        background: linear-gradient(90deg, #E5E7EB 25%, #F3F4F6 37%, #E5E7EB 63%);
-        background-size: 800px 100%;
-        animation: skeletonShimmer 1.8s ease-in-out infinite;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-}
-
 const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
-  width = '100%',
-  height = 20,
-  borderRadius = 8,
-  style,
+  width = '100%', height = 18, borderRadius = 8, style,
 }) => {
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const anim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    if (Platform.OS === 'web') return; // CSS handles web animation
-    const animation = Animated.loop(
+    if (Platform.OS === 'web') return;
+    Animated.loop(
       Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
+        Animated.timing(anim, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
       ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [animatedValue]);
+    ).start();
+    return () => anim.stopAnimation();
+  }, []);
 
   if (Platform.OS === 'web') {
     return (
       <div
-        className="skeleton-shimmer"
+        className="gc-skeleton"
         style={{
-          width: typeof width === 'number' ? `${width}px` : width,
+          width: typeof width === 'number' ? width : width,
           height,
           borderRadius,
           ...(style || {}),
@@ -71,99 +71,97 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     );
   }
 
-  const opacity = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.7],
-  });
-
   return (
     <Animated.View
       style={[
-        styles.skeleton,
-        {
-          width,
-          height,
-          borderRadius,
-          opacity,
-        },
+        { width, height, borderRadius, backgroundColor: COLORS.cardElevated, opacity: anim },
         style,
       ]}
     />
   );
 };
 
+// ── Match card skeleton ─────────────────────────────────────────────────────
 const SkeletonCard: React.FC = () => (
-  <View style={styles.card}>
-    {/* Status badge skeleton */}
-    <View style={{ marginBottom: 14 }}>
-      <SkeletonLoader width={80} height={22} borderRadius={8} />
+  <View style={s.card}>
+    {/* Header */}
+    <View style={s.row}>
+      <SkeletonLoader width={64} height={20} borderRadius={10} />
+      <SkeletonLoader width={48} height={12} borderRadius={6} />
     </View>
     {/* Teams row */}
-    <View style={styles.teamsRow}>
+    <View style={[s.row, { marginTop: SPACING.lg, alignItems: 'center' }]}>
       <View style={{ flex: 1, gap: 8 }}>
-        <SkeletonLoader width={100} height={16} />
-        <SkeletonLoader width={50} height={28} borderRadius={6} />
+        <SkeletonLoader width={40} height={40} borderRadius={20} />
+        <SkeletonLoader width={80} height={12} borderRadius={6} />
+        <SkeletonLoader width={48} height={22} borderRadius={6} />
       </View>
-      <View style={styles.vsContainer}>
-        <SkeletonLoader width={24} height={14} borderRadius={4} />
-      </View>
+      <SkeletonLoader width={24} height={16} borderRadius={4} style={{ marginHorizontal: SPACING.md }} />
       <View style={{ flex: 1, alignItems: 'flex-end', gap: 8 }}>
-        <SkeletonLoader width={100} height={16} />
-        <SkeletonLoader width={50} height={28} borderRadius={6} />
+        <SkeletonLoader width={40} height={40} borderRadius={20} />
+        <SkeletonLoader width={80} height={12} borderRadius={6} />
+        <SkeletonLoader width={48} height={22} borderRadius={6} />
       </View>
     </View>
     {/* Footer */}
-    <View style={styles.cardFooter}>
-      <SkeletonLoader width={70} height={12} />
-      <SkeletonLoader width={20} height={20} borderRadius={10} />
+    <View style={[s.row, { marginTop: SPACING.lg, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderLight }]}>
+      <SkeletonLoader width={90} height={10} borderRadius={5} />
+      <SkeletonLoader width={70} height={10} borderRadius={5} />
     </View>
   </View>
 );
 
-const SkeletonMatchList: React.FC<{ count?: number }> = ({ count = 5 }) => (
-  <View style={styles.list}>
-    {Array.from({ length: count }, (_, index) => (
-      <SkeletonCard key={index} />
-    ))}
+// ── Scorecard row skeleton ──────────────────────────────────────────────────
+export const SkeletonScorecardRow: React.FC = () => (
+  <View style={[s.row, { paddingVertical: 10 }]}>
+    <View style={{ flex: 3, gap: 4 }}>
+      <SkeletonLoader width="80%" height={13} borderRadius={6} />
+      <SkeletonLoader width="50%" height={10} borderRadius={5} />
+    </View>
+    <SkeletonLoader width={28} height={13} borderRadius={6} />
+    <SkeletonLoader width={28} height={13} borderRadius={6} style={{ marginLeft: 8 }} />
+    <SkeletonLoader width={28} height={13} borderRadius={6} style={{ marginLeft: 8 }} />
   </View>
 );
 
-const styles = StyleSheet.create({
-  skeleton: {
-    backgroundColor: '#E5E7EB',
-  },
+// ── Profile skeleton ────────────────────────────────────────────────────────
+export const SkeletonProfile: React.FC = () => (
+  <View style={{ alignItems: 'center', padding: SPACING.xl, gap: SPACING.md }}>
+    <SkeletonLoader width={96} height={96} borderRadius={48} />
+    <SkeletonLoader width={140} height={20} borderRadius={8} />
+    <SkeletonLoader width={100} height={14} borderRadius={6} />
+    <View style={[s.row, { gap: 12, marginTop: SPACING.sm }]}>
+      {[1,2,3,4].map(i => (
+        <View key={i} style={{ alignItems: 'center', gap: 6 }}>
+          <SkeletonLoader width={52} height={36} borderRadius={10} />
+          <SkeletonLoader width={36} height={9} borderRadius={5} />
+        </View>
+      ))}
+    </View>
+  </View>
+);
+
+// ── Match list ──────────────────────────────────────────────────────────────
+const SkeletonMatchList: React.FC<{ count?: number }> = ({ count = 4 }) => (
+  <View style={{ gap: 0 }}>
+    {Array.from({ length: count }, (_, i) => <SkeletonCard key={i} />)}
+  </View>
+);
+
+const s = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: COLORS.border,
   },
-  teamsRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
-  },
-  vsContainer: {
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  cardFooter: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  list: {
-    padding: 12,
+    gap: SPACING.md,
   },
 });
 
