@@ -27,34 +27,36 @@ export const saveUserProfile = async (uid: string, data: Partial<UserProfile>) =
  * Throws { message: 'TIMEOUT' } if the network hangs beyond 8 seconds.
  */
 export const getUserProfile = async (uid: string) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-
+  let timer: NodeJS.Timeout;
   try {
-    const { data, error } = await supabase
+    const fetchPromise = supabase
       .from('users')
       .select('*')
       .eq('id', uid)
-      .limit(1)
-      .abortSignal(controller.signal);
+      .limit(1);
 
-    clearTimeout(timer);
+    const timeoutPromise = new Promise<any>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+    });
+
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (error) {
-      if (error.message?.includes('abort') || error.name === 'AbortError') {
+      if (error.message?.includes('abort') || error.name === 'AbortError' || error.message === 'TIMEOUT') {
         throw new Error('TIMEOUT');
       }
       throw error;
     }
     return data && data.length > 0 ? data[0] : null;
   } catch (error: any) {
-    clearTimeout(timer);
     const isTimeout =
       error.message === 'TIMEOUT' ||
       error.name === 'AbortError' ||
       error.message?.toLowerCase().includes('abort');
     if (isTimeout) throw new Error('TIMEOUT');
     return null;
+  } finally {
+    clearTimeout(timer!);
   }
 };
 

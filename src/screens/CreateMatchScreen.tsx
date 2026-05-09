@@ -56,10 +56,27 @@ const CreateMatchScreen = () => {
   const [creatorTeam, setCreatorTeam] = useState<string>('');
 
   useEffect(() => {
+    const checkActiveMatches = async () => {
+      if (existingMatchId) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      try {
+        const matches = await getUserMatches(session.user.id);
+        const activeMatch = matches.find(m => m.match_state !== 'completed');
+        if (activeMatch) {
+          Alert.alert('Active Match Exists', 'You must complete your existing match before creating a new one.');
+          navigation.goBack();
+        }
+      } catch (e) {
+        console.error('Error checking active matches:', e);
+      }
+    };
+
     fetchRecentPlayers();
     if (existingMatchId) {
       loadExistingMatch(existingMatchId);
     } else {
+      checkActiveMatches();
       setMatchDate(new Date().toLocaleDateString());
       setMatchTime(new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
     }
@@ -77,12 +94,12 @@ const CreateMatchScreen = () => {
         setOvers(String(data.overs || 20));
         setTeam1(data.team1 || '');
         setTeam2(data.team2 || '');
-        setTeam1Logo(data.team1Logo || STOCK_LOGOS[0]);
-        setTeam2Logo(data.team2Logo || STOCK_LOGOS[5]);
+        setTeam1Logo(data.team1_logo || data.team1Logo || STOCK_LOGOS[0]);
+        setTeam2Logo(data.team2_logo || data.team2Logo || STOCK_LOGOS[5]);
         setMatchDate(data.date || new Date().toLocaleDateString());
         setMatchTime(data.time || new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-        setTeam1Players(data.team1Players || []);
-        setTeam2Players(data.team2Players || []);
+        setTeam1Players(data.team1_players || data.team1Players || []);
+        setTeam2Players(data.team2_players || data.team2Players || []);
         setWideExtraRun(data.rules?.wideExtraRun ?? true);
         setNoBallExtraRun(data.rules?.noBallExtraRun ?? true);
         setBallByBall(data.rules?.ballByBall ?? true);
@@ -102,8 +119,8 @@ const CreateMatchScreen = () => {
       const matches = await getUserMatches(session.user.id);
       const players = new Set<string>();
       matches.forEach(m => {
-        m.team1Players?.forEach(p => players.add(p));
-        m.team2Players?.forEach(p => players.add(p));
+        (m.team1_players || m.team1Players || []).forEach(p => players.add(p));
+        (m.team2_players || m.team2Players || []).forEach(p => players.add(p));
       });
       setRecentPlayers(Array.from(players).slice(0, 15)); // top 15
     } catch (e) {
@@ -188,34 +205,35 @@ const CreateMatchScreen = () => {
       if (isEditing && existingMatchId) {
         // Just update existing match
         await updateMatch(existingMatchId, {
-          name: matchName, type: matchType, overs: parseInt(overs) || 20, location,
-          date: matchDate, time: matchTime, team1, team2, team1Logo, team2Logo,
+          name: matchName.trim(), type: matchType, overs: parseInt(overs) || 20, location: location.trim(),
+          date: matchDate, time: matchTime, team1: team1.trim(), team2: team2.trim(), team1Logo, team2Logo,
           team1Players, team2Players, rules: { wideExtraRun, noBallExtraRun, ballByBall, allow_super_over: allowSuperOver },
-          ...(status === 'Live' ? { status: 'Live' as const, tossWinner, tossDecision } : {}),
+          ...(status === 'Live' ? { status: 'Live' as const, tossWinner: tossWinner?.trim(), tossDecision } : {}),
         });
         return { id: existingMatchId };
       } else {
         const matchId = generateMatchId();
         const match: Match = {
+          match_id: matchId,
           matchId,
-          name: matchName,
+          name: matchName.trim(),
           type: matchType,
           overs: parseInt(overs) || 20,
-          location,
+          location: location.trim(),
           date: matchDate,
           time: matchTime,
-          team1,
-          team2,
+          team1: team1.trim(),
+          team2: team2.trim(),
           team1Logo,
           team2Logo,
           team1Players,
           team2Players,
-          tossWinner,
+          tossWinner: tossWinner?.trim(),
           tossDecision,
           currentInnings: 1,
           status,
           createdBy: session.user.id,
-          creator_team: creatorTeam || team1,
+          creator_team: creatorTeam ? creatorTeam.trim() : team1.trim(),
           allow_super_over: allowSuperOver,
           rules: { wideExtraRun, noBallExtraRun, ballByBall, allow_super_over: allowSuperOver }
         };

@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+  prompt: () => Promise<void>;
+}
+
 interface PWAContextType {
   isInstallable: boolean;
-  installPrompt: any;
+  installPrompt: BeforeInstallPromptEvent | null;
   promptInstall: () => Promise<void>;
   isInstalled: boolean;
 }
@@ -19,27 +24,25 @@ export const usePWA = () => useContext(PWAContext);
 
 export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInstallable, setIsInstallable] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    // Check if already installed
-    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+    let promptDelay: ReturnType<typeof setTimeout> | undefined;
+
+    if (window.matchMedia?.('(display-mode: standalone)').matches) {
       setIsInstalled(true);
     }
 
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-      // Delay showing the install prompt button by 15 seconds
-      setTimeout(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+      promptDelay = setTimeout(() => {
         setIsInstallable(true);
       }, 15000);
     };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     const handleAppInstalled = () => {
       setIsInstallable(false);
@@ -47,9 +50,11 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsInstalled(true);
     };
 
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      if (promptDelay) clearTimeout(promptDelay);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
@@ -57,7 +62,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const promptInstall = async () => {
     if (!installPrompt) return;
-    
+
     try {
       await installPrompt.prompt();
       const { outcome } = await installPrompt.userChoice;
@@ -66,7 +71,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setInstallPrompt(null);
       }
     } catch {
-      // promptInstall error — ignore
+      // Browsers reject when the prompt is no longer available.
     }
   };
 

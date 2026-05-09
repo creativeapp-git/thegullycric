@@ -26,7 +26,16 @@ export interface Match {
 
   // --- DB snake_case fields (returned from Supabase) ---
   match_id: string;
-  match_state?: 'setup' | 'live' | 'innings_break' | 'completed';
+  match_state?:
+    | 'setup'
+    | 'live'
+    | 'paused'
+    | 'wicket_fall'
+    | 'over_break'
+    | 'innings_break'
+    | 'super_over_setup'
+    | 'super_over_break'
+    | 'completed';
   created_by?: string;
   team1: string;
   team2: string;
@@ -41,6 +50,9 @@ export interface Match {
   non_striker?: string;
   current_bowler?: string;
   last_bowler?: string;
+  nonStriker?: string;
+  currentBowler?: string;
+  lastBowler?: string;
   score1?: number;
   score2?: number;
   wickets1?: number;
@@ -57,6 +69,7 @@ export interface Match {
   super_score2?: number;
   super_wickets2?: number;
   creator_team?: string;
+  out_players?: string[];
   toss_winner?: string;
   toss_decision?: string;
   created_at?: string;

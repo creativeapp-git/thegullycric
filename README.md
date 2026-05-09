@@ -1,23 +1,56 @@
-# Gully Cricket Scoring App
+# GullyCric
 
-A React Native app for scoring informal cricket matches (gully cricket) with live hosting, location-based discovery, and 2D ball-hit animations.
+GullyCric is an Expo React Native app for creating, scoring, and sharing informal cricket matches. It supports web export/PWA deployment and uses Supabase for auth, profiles, match data, and live updates.
 
 ## Features
 
-- **Home**: Live matches, search, map view for nearby matches.
-- **My Space**: Create/host live or offline matches.
-- **Fixtures**: Scheduled matches.
-- **Settings**: User preferences, match rules.
+- Authenticated player profiles with username-based discovery.
+- Create fixtures or live matches with teams, toss details, overs, and rules.
+- Ball-by-ball scoring with live match state and public share pages.
+- Match history, fixtures, leaderboard, settings, and PWA install support.
 
-## Setup
+## Requirements
 
-1. Install dependencies: `npm install`
-2. Set up Firebase: Add your config to `src/services/firebase.ts`
-3. Run: `npm run web` or `npm run android`
+- Node.js and npm
+- Expo CLI through `npx expo`
+- Supabase project with the schema from the migration SQL files in this repo
+
+## Environment
+
+Create a `.env` file with:
+
+```bash
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+Only use the public anon key in this app. Keep service-role keys out of client code and deployment logs.
+
+## Scripts
+
+```bash
+npm install
+npm run web
+npm run typecheck
+npm run build:web
+npm run production:check
+```
+
+`npm run production:check` runs TypeScript validation and exports the production web build into `dist/`.
+
+## Deployment
+
+Netlify is configured through `netlify.toml`:
+
+- Build command: `npx expo export -p web`
+- Publish directory: `dist`
+- SPA fallback: all routes redirect to `/index.html`
+
+Configure the two `EXPO_PUBLIC_SUPABASE_*` variables in the hosting provider before deploying.
 
 ## Tech Stack
 
-- React Native (Expo)
-- Firebase (Auth, Firestore, Realtime DB)
+- Expo / React Native / React Native Web
 - React Navigation
-- Google Maps (via react-native-maps)
+- Supabase
+- TypeScript

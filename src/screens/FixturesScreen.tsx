@@ -54,7 +54,7 @@ const FixturesScreen = () => {
   const renderFixture = ({ item }: { item: Match }) => (
     <MatchCard
       match={item}
-      onPress={() => navigation.navigate('MatchDetail', { matchId: item.id || item.matchId })}
+      onPress={() => navigation.navigate('MatchDetail', { matchId: (item.id || item.matchId)! })}
     />
   );
 
@@ -94,7 +94,7 @@ const FixturesScreen = () => {
         <FlatList
           data={filteredFixtures}
           renderItem={renderFixture}
-          keyExtractor={(item) => item.id || item.matchId}
+          keyExtractor={(item) => (item.id || item.matchId)!}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}

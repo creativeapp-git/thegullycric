@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="theme-color" content="#10B981" />
     <title>%WEB_TITLE%</title>
     <link rel="manifest" href="/manifest.json" />
     <!-- The `react-native-web` recommended style reset -->
@@ -21,10 +22,7 @@
       // Only register service worker in production (not localhost dev server)
       if ('serviceWorker' in navigator && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(
-            (registration) => { console.log('SW registered: ', registration.scope); },
-            (err) => { console.warn('SW registration failed: ', err); }
-          );
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
       } else if ('serviceWorker' in navigator) {
         // Dev mode: unregister any stale service workers so they don't interfere

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Share, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Share, Platform, Alert } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+// matchService functions are defined inline in this screen
+import { CONFIG } from '../config';
 import { supabase } from '../services/supabase';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '../theme';
 import { Button, Card } from '../components/UI';
@@ -33,6 +35,9 @@ export default function ScoringScreen() {
   const [wicketFielder, setWicketFielder] = useState<string|null>(null);
   const [runOutPlayer, setRunOutPlayer] = useState<string|null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [pendingBowlerChange, setPendingBowlerChange] = useState(false);
+  const [showExtraPicker, setShowExtraPicker] = useState(false);
+  const [pendingExtraType, setPendingExtraType] = useState<'legbye'|'bye'|'wide'|'noball'|null>(null);
 
   // ── INIT & REALTIME ──
   const fetchBalls = useCallback(async (innings: number) => {
@@ -58,7 +63,7 @@ export default function ScoringScreen() {
         setIsSpectator(spectator);
 
         if (!spectator) {
-          if (data.match_state === 'setup' || (!data.striker && !data.currentBowler && data.match_state !== 'live')) {
+          if (data.match_state !== 'completed' && (!data.striker || !data.non_striker || !data.current_bowler)) {
             setSelectionType('initial'); setShowModal(true);
           }
         }
@@ -75,8 +80,11 @@ export default function ScoringScreen() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'balls', filter: `match_id=eq.${matchId}` }, (p) => {
         setInningsBalls(prev => [...prev, p.new]);
         if (p.new.is_legal !== false) {
-          setTotalLegalBalls(prev => prev + 1);
-          setCurrentOverNum(prev => Math.floor((prev + 1) / 6));
+          setTotalLegalBalls(prev => {
+            const next = prev + 1;
+            setCurrentOverNum(Math.floor(next / 6));
+            return next;
+          });
         }
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -88,10 +96,15 @@ export default function ScoringScreen() {
   const scoreField = match?.current_innings === 1 ? 'score1' : 'score2';
   const wicketsField = match?.current_innings === 1 ? 'wickets1' : 'wickets2';
   const outPlayers = match?.out_players || [];
-  const battingTeamPlayers = match?.current_innings === 1 ? match?.team1_players : match?.team2_players;
-  const bowlingTeamPlayers = match?.current_innings === 1 ? match?.team2_players : match?.team1_players;
+  const battingFirst = match?.toss_decision === 'Bat' ? match?.toss_winner : (match?.toss_winner === match?.team1 ? match?.team2 : match?.team1);
+  const battingSecond = battingFirst === match?.team1 ? match?.team2 : match?.team1;
+  const battingTeamName = match?.current_innings === 1 || match?.current_innings === 3 ? battingFirst : battingSecond;
+  
+  const battingTeamPlayers = battingTeamName === match?.team1 ? (match?.team1_players || match?.team1Players) : (match?.team2_players || match?.team2Players);
+  const bowlingTeamPlayers = battingTeamName === match?.team1 ? (match?.team2_players || match?.team2Players) : (match?.team1_players || match?.team1Players);
   const availableBatters = (battingTeamPlayers||[]).filter((p:string) => !outPlayers.includes(p));
   const availableBowlers = (bowlingTeamPlayers||[]).filter((p:string) => p !== match?.last_bowler);
+  const maxWickets = (battingTeamPlayers?.length ?? 11) - 1;
 
   const getBowlerStats = (bName: string) => {
     const bBalls = inningsBalls.filter(b => b.bowler === bName);
@@ -101,6 +114,13 @@ export default function ScoringScreen() {
     return `${Math.floor(legal/6)}.${legal%6}-${runs}-${wkts}`;
   };
 
+  const getBatterStats = (pName: string) => {
+    const bBalls = inningsBalls.filter(b => b.batter === pName);
+    const runs = bBalls.filter(b => b.extra_type !== 'bye' && b.extra_type !== 'legbye').reduce((sum, b) => sum + (b.runs||0), 0);
+    const balls = bBalls.filter(b => b.is_legal !== false).length;
+    return `${runs} (${balls})`;
+  };
+
   // ── MODULAR SCORING ──
   const updateMatchStats = async (updates: any) => {
     const { error } = await supabase.from('matches').update(updates).eq('id', matchId);
@@ -108,10 +128,11 @@ export default function ScoringScreen() {
     setMatch((p:any) => p ? { ...p, ...updates } : p);
   };
 
-  const updatePlayerStats = async (player: string, team: string, stats: any) => {
+  const updatePlayerStats = async (player: string | null | undefined, team: string, stats: any) => {
+    if (!player) return;
     // Quick inline upsert for player stats
     try {
-      const { data: existing } = await supabase.from('match_players').select('*').eq('match_id', matchId).eq('player_name', player).single();
+      const { data: existing } = await supabase.from('match_players').select('*').eq('match_id', matchId).eq('player_name', player).maybeSingle();
       if (existing) {
         const nextStats = { ...stats };
         for (const k in stats) {
@@ -126,6 +147,13 @@ export default function ScoringScreen() {
 
   const handleAddBall = async (p: { r: number; e: number; type?: string; isW?: boolean; wType?: string; dismissedPlayer?: string }) => {
     if (isSubmitting || !isLive || isSpectator) return;
+    if (!match?.striker || !match?.non_striker || !match?.current_bowler) {
+      setSelectionType('initial');
+      setShowModal(true);
+      setErrorMessage('Select striker, non-striker, and bowler before scoring.');
+      return;
+    }
+
     setIsSubmitting(true); setErrorMessage('');
 
     try {
@@ -139,29 +167,33 @@ export default function ScoringScreen() {
       let runsToBowler = p.r + p.e;
 
       if (isByeOrLegBye) { runsToBatter = 0; runsToBowler = 0; }
-      if (!isLegal) { runsToBatter = 0; ballRuns = 0; }
+      // No ball: batter gets credited for runs hit, only the extra penalty is not batter's
+      // Wide: batter gets 0 runs (ballRuns = 0)
+      if (p.type === 'wide') { runsToBatter = 0; ballRuns = 0; }
 
       const wTypeNormalized = p.wType ? p.wType.toLowerCase().replace(/\s/g, '') : null;
 
       // 2. Insert Ball
       await supabase.from('balls').insert({
-        match_id: matchId, innings: match.current_innings, over: currentOverNum, ball: totalLegalBalls + 1,
+        match_id: matchId, innings: match.current_innings, over: currentOverNum, ball: inningsBalls.length + 1,
         runs: ballRuns, extras: ballExtras, extra_type: p.type || null, is_legal: isLegal,
         is_wicket: !!p.isW, wicket_type: wTypeNormalized, dismissed_player: p.dismissedPlayer || null,
-        batter: match.striker, bowler: match.currentBowler, fielder: wicketFielder
+        batter: match.striker, bowler: match.current_bowler, fielder: wicketFielder
       });
 
       // 3. Update Player Stats
-      await updatePlayerStats(match.striker, match.current_innings===1?match.team1:match.team2, { runs_scored: runsToBatter, balls_faced: isLegal ? 1 : 0 });
-      await updatePlayerStats(match.currentBowler, match.current_innings===1?match.team2:match.team1, { runs_conceded: runsToBowler, balls_bowled: isLegal ? 1 : 0, wickets_taken: p.isW && wTypeNormalized !== 'runout' ? 1 : 0 });
+      const bTeam = battingTeamName || match.team1;
+      const fTeam = bTeam === match.team1 ? match.team2 : match.team1;
+      await updatePlayerStats(match.striker, bTeam, { runs_scored: runsToBatter, balls_faced: isLegal ? 1 : 0, fours: runsToBatter === 4 ? 1 : 0, sixes: runsToBatter === 6 ? 1 : 0 });
+      await updatePlayerStats(match.current_bowler, fTeam, { runs_conceded: isByeOrLegBye ? 0 : runsToBowler, balls_bowled: isLegal ? 1 : 0, wickets_taken: p.isW && wTypeNormalized !== 'runout' ? 1 : 0 });
       if (p.isW && p.dismissedPlayer) {
-        await updatePlayerStats(p.dismissedPlayer, match.current_innings===1?match.team1:match.team2, { is_out: true });
+        await updatePlayerStats(p.dismissedPlayer, bTeam, { is_out: true });
       }
 
       // 4. Update Match Logic
       let nextStriker = match.striker;
-      let nextNon = match.nonStriker;
-      let nextBowler = match.currentBowler;
+      let nextNon = match.non_striker;
+      let nextBowler = match.current_bowler;
       let lastBowler = match.last_bowler;
       let nextState = 'live';
       const nextOut = [...outPlayers];
@@ -175,7 +207,7 @@ export default function ScoringScreen() {
         nextOut.push(p.dismissedPlayer || match.striker);
         nextState = 'wicket_fall';
         if (p.dismissedPlayer === match.striker) nextStriker = null;
-        if (p.dismissedPlayer === match.nonStriker) nextNon = null;
+        if (p.dismissedPlayer === match.non_striker) nextNon = null;
       } else if (physicalRuns % 2 !== 0) {
         [nextStriker, nextNon] = [nextNon, nextStriker];
       }
@@ -186,28 +218,30 @@ export default function ScoringScreen() {
       if (isOverEnd) {
         [nextStriker, nextNon] = [nextNon, nextStriker];
         lastBowler = nextBowler; nextBowler = null;
+        setPendingBowlerChange(true);
         if (nextState !== 'wicket_fall') nextState = 'over_break';
       }
 
       let winner = match.winner;
       let newTarget = match.target;
+      const battingTeam = battingTeamName || match.team1;
+      const fieldingTeam = battingTeam === match.team1 ? match.team2 : match.team1;
 
       if (match.current_innings === 2) {
         const target = match.target || ((match.score1 || 0) + 1);
         if (newScore >= target) {
           nextState = 'completed';
-          winner = match.team2;
-        } else if (newTotalLegal >= maxBalls || newWickets >= 10) {
+          winner = battingTeam;
+        } else if (newTotalLegal >= maxBalls || newWickets >= maxWickets) {
           nextState = 'completed';
           if (newScore === target - 1) {
             winner = 'tie';
           } else {
-            winner = match.team1;
+            winner = fieldingTeam;
           }
         }
       } else {
-        if (newTotalLegal >= maxBalls) nextState = 'innings_break';
-        if (newWickets >= 10) nextState = 'innings_break'; // All out
+        if (newTotalLegal >= maxBalls || newWickets >= maxWickets) nextState = 'innings_break';
 
         if (nextState === 'innings_break') {
           newTarget = newScore + 1;
@@ -225,13 +259,77 @@ export default function ScoringScreen() {
       if (winner) updates.winner = winner;
       if (newTarget) updates.target = newTarget;
 
+      if (nextState === 'innings_break') {
+        updates.current_innings = 2;
+        updates.striker = null;
+        updates.non_striker = null;
+        updates.current_bowler = null;
+        updates.last_bowler = null;
+        updates.out_players = [];
+      }
+
       await updateMatchStats(updates);
+      const fetchInnings = nextState === 'innings_break' ? 2 : match.current_innings;
+      await fetchBalls(fetchInnings);
 
       // 5. Open Modals if needed
-      if (nextState === 'wicket_fall') { setSelectionType('batter'); setShowModal(true); }
+      if (nextState === 'innings_break') { setSelectionType('initial'); setShowModal(true); }
+      else if (nextState === 'wicket_fall') { setSelectionType('batter'); setShowModal(true); }
       else if (nextState === 'over_break') { setSelectionType('bowler'); setShowModal(true); }
-    } catch(e:any) { setErrorMessage(e.message); }
+    } catch(e:any) {
+      console.error('Add ball failed:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+      setErrorMessage(e.message);
+    }
     finally { setIsSubmitting(false); setWicketFielder(null); setRunOutPlayer(null); setWicketType(null); }
+  };
+
+  const handleUndo = async () => {
+    if (isSubmitting) return;
+    const undo = async () => {
+      setIsSubmitting(true);
+      try {
+        const { data: lastBall } = await supabase
+          .from('balls').select('*').eq('match_id', matchId)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (lastBall) {
+          await supabase.from('balls').delete().eq('id', lastBall.id);
+          // Re-fetch all balls & recalculate
+          const { data: allBalls } = await supabase
+            .from('balls').select('*').eq('match_id', matchId)
+            .order('created_at', { ascending: true });
+          const balls = allBalls || [];
+          // Recalculate scores
+          let s1 = 0, w1 = 0, s2 = 0, w2 = 0;
+          const outP: string[] = [];
+          balls.forEach(b => {
+            const total = (b.runs || 0) + (b.extras || 0);
+            if (b.innings === 1) { s1 += total; if (b.is_wicket) w1++; }
+            else if (b.innings === 2) { s2 += total; if (b.is_wicket) w2++; }
+            if (b.is_wicket && (b.dismissed_player || b.batter)) outP.push(b.dismissed_player || b.batter);
+          });
+          await updateMatchStats({
+            score1: s1, wickets1: w1, score2: s2, wickets2: w2,
+            striker: lastBall.batter || match?.striker || null,
+            non_striker: match?.non_striker || null,
+            current_bowler: lastBall.bowler || match?.current_bowler || null,
+            match_state: balls.length > 0 ? 'live' : 'setup',
+            out_players: outP,
+            winner: null,
+          });
+          await fetchBalls(match.current_innings || 1);
+        }
+      } catch (e) { console.error('Undo error:', e); }
+      finally { setIsSubmitting(false); }
+    };
+    if (Platform.OS === 'web') {
+      if (!window.confirm('Delete last ball and recalculate?')) return;
+      undo();
+    } else {
+      Alert.alert("Undo", "Delete last ball and recalculate?", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Undo", style: "destructive", onPress: undo }
+      ]);
+    }
   };
 
   const handleConfirmSelection = async () => {
@@ -252,8 +350,30 @@ export default function ScoringScreen() {
       if (selectedBowler) updates.current_bowler = selectedBowler;
       await updateMatchStats(updates);
       setShowModal(false);
+      
+      if (selectionType === 'batter' && pendingBowlerChange) {
+        setPendingBowlerChange(false);
+        setTimeout(() => { setSelectedBowler(null); setSelectionType('bowler'); setShowModal(true); }, 300);
+      } else if (selectionType === 'bowler' || selectionType === 'initial') {
+        setPendingBowlerChange(false);
+      }
     } catch(e) {}
     finally { setIsSubmitting(false); }
+  };
+
+  const handleSwapStrikers = async () => {
+    if (isSubmitting || isSpectator || !match?.striker || !match?.non_striker) return;
+    setIsSubmitting(true);
+    try {
+      await updateMatchStats({
+        striker: match.non_striker,
+        non_striker: match.striker
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ── UI ──
@@ -277,18 +397,49 @@ export default function ScoringScreen() {
 
   return (
     <View style={styles.container}>
+      <Modal visible={showExtraPicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight:'40%'}]}>
+          <Text style={styles.modalHeading}>{
+            pendingExtraType === 'legbye' ? 'LEG BYES' : 
+            pendingExtraType === 'noball' ? 'RUNS OFF NO BALL' : 
+            pendingExtraType === 'wide' ? 'EXTRA WIDE RUNS' : 'BYES'
+          }</Text>
+          <View style={{flexDirection:'row',gap:24,justifyContent:'center',marginTop:24, marginBottom: 16, flexWrap: 'wrap'}}>
+            {[0,1,2,3,4,6].map(n=>(
+              <TouchableOpacity key={n} style={[styles.controlBtn,{flex:0,width:72,height:72}]} onPress={()=>{
+                setShowExtraPicker(false);
+                if (pendingExtraType === 'noball') {
+                  handleAddBall({r:n, e:match?.rules?.noBallExtraRun!==false?1:0, type:'noball'});
+                } else if (pendingExtraType === 'wide') {
+                  handleAddBall({r:0, e:n + (match?.rules?.wideExtraRun!==false?1:0), type:'wide'});
+                } else {
+                  handleAddBall({r:0, e:n, type:pendingExtraType!});
+                }
+              }}>
+                <Text style={styles.controlText}>{n}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity onPress={()=>setShowExtraPicker(false)} style={{alignItems:'center',marginTop:16, padding: 12}}>
+            <Text style={{color:COLORS.textSecondary,fontWeight:'700', fontSize: 16}}>Cancel</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
       <Modal visible={showModal} transparent animationType="slide">
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.modalHeading}>{selectionType.toUpperCase()}</Text>
-            {selectionType==='initial'&&<>{renderSelector('Striker',availableBatters,selectedStriker,setSelectedStriker)}{renderSelector('Non-Striker',availableBatters.filter((p:string)=>p!==selectedStriker),selectedNonStriker,setSelectedNonStriker)}{renderSelector('Bowler',availableBowlers,selectedBowler,setSelectedBowler)}</>}
-            {selectionType==='bowler'&&renderSelector('Bowler',availableBowlers,selectedBowler,setSelectedBowler)}
             {selectionType==='batter'&&renderSelector('Next Batter',availableBatters.filter((p:string)=>p!==match?.non_striker),selectedStriker,setSelectedStriker)}
-            {selectionType==='wicket'&&<>
+            {selectionType==='bowler'&&renderSelector('Next Bowler',availableBowlers,selectedBowler,setSelectedBowler)}
+            {selectionType==='initial'&&renderSelector('Striker',availableBatters,selectedStriker,setSelectedStriker)}
+            {selectionType==='initial'&&renderSelector('Non-Striker',availableBatters.filter((p:string)=>p!==selectedStriker),selectedNonStriker,setSelectedNonStriker)}
+            {selectionType==='initial'&&renderSelector('Opening Bowler',availableBowlers,selectedBowler,setSelectedBowler)}
+            {selectionType==='wicket'&& (
+              <>
               {renderSelector('Wicket Type', ['Bowled', 'Caught', 'Run Out', 'LBW', 'Stumped'], wicketType, setWicketType)}
               {wicketType==='Caught'&&renderSelector('Fielder', bowlingTeamPlayers||[], wicketFielder, setWicketFielder)}
               {wicketType==='Run Out'&&renderSelector('Dismissed', [match?.striker, match?.non_striker].filter(Boolean), runOutPlayer, setRunOutPlayer)}
-            </>}
+            </>)}
           </ScrollView>
           <Button title="Confirm" onPress={handleConfirmSelection} loading={isSubmitting} disabled={isConfirmDisabled} style={{marginTop:20}}/>
         </View></View>
@@ -298,9 +449,10 @@ export default function ScoringScreen() {
         <TouchableOpacity onPress={()=>navigation.goBack()}><Ionicons name="chevron-back" size={24} color={COLORS.text}/></TouchableOpacity>
         <Text style={styles.headerTitle}>{match?.team1} vs {match?.team2}</Text>
         <TouchableOpacity onPress={async () => {
-          const mid = match?.match_id;
+          const mid = match?.match_id || match?.matchId;
           if (!mid) return;
-          const url = `https://thegullycric.web.app/match/${mid}`;
+          const origin = Platform.OS === 'web' ? window.location.origin : CONFIG.APP_URL;
+          const url = `${origin}/match/${mid}`;
           const overs = `${Math.floor(totalLegalBalls/6)}.${totalLegalBalls%6}`;
           const lines = [
             `🏏 ${match.team1} vs ${match.team2}`,
@@ -336,26 +488,65 @@ export default function ScoringScreen() {
              </Text>
           )}
           <View style={styles.playersRow}>
-            <View style={styles.playerBox}><Text style={styles.pLabel}>BATTER</Text><Text style={styles.pName}>🏏 {match?.striker}</Text></View>
-            <View style={styles.playerBox}><Text style={styles.pLabel}>NON-STRIKER</Text><Text style={styles.pName}>🏃 {match?.non_striker}</Text></View>
-            <View style={styles.playerBox}><Text style={styles.pLabel}>BOWLER</Text><Text style={styles.pName}>⚾ {match?.current_bowler} ({getBowlerStats(match?.current_bowler||'')})</Text></View>
+            <View style={styles.playerCol}>
+              <Text style={styles.playerRole}>BATTER</Text>
+              <Text style={styles.playerName}>🏏 {match?.striker || '-'}</Text>
+            </View>
+            <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+              {!isSpectator && (
+                <TouchableOpacity onPress={handleSwapStrikers} style={styles.swapBtn}>
+                  <Ionicons name="swap-horizontal" size={24} color={COLORS.white} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.playerCol}>
+              <Text style={styles.playerRole}>NON-STRIKER</Text>
+              <Text style={styles.playerName}>🏃 {match?.non_striker || '-'}</Text>
+            </View>
+          </View>
+          <View style={styles.playersRow}>
+            <View style={styles.playerBox}><Text style={styles.pLabel}>BOWLER</Text><Text style={styles.pName}>🎯 {match?.current_bowler}</Text></View>
+            <View style={styles.playerBox}><Text style={styles.pLabel}>LAST BOWLER</Text><Text style={styles.pName}>🎯 {match?.last_bowler || '-'}</Text></View>
           </View>
         </Card>
 
         {errorMessage ? <Text style={{color:COLORS.danger, marginBottom:10}}>{errorMessage}</Text> : null}
+
+        {match?.match_state === 'paused' && !isSpectator && (
+          <TouchableOpacity 
+            style={[styles.controlBtn, { backgroundColor: COLORS.primary, marginBottom: 16, height: 60 }]} 
+            onPress={() => updateMatchStats({ match_state: 'live' })}
+          >
+            <Text style={{ color: COLORS.white, fontWeight: '800', fontSize: 18 }}>RESUME MATCH</Text>
+          </TouchableOpacity>
+        )}
 
         {!isSpectator ? (
           <View style={[styles.controls, (!isLive || isSubmitting) && {opacity:0.4}]} pointerEvents={isLive && !isSubmitting ? 'auto' : 'none'}>
             <View style={styles.row}>{[0,1,2,3].map(r=>(<TouchableOpacity key={r} style={styles.controlBtn} onPress={()=>handleAddBall({r,e:0})}><Text style={styles.controlText}>{r}</Text></TouchableOpacity>))}</View>
             <View style={styles.row}>
               {[4,6].map(r=>(<TouchableOpacity key={r} style={[styles.controlBtn, styles.boundaryBtn]} onPress={()=>handleAddBall({r,e:0})}><Text style={[styles.controlText, styles.boundaryText]}>{r}</Text></TouchableOpacity>))}
-              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>handleAddBall({r:0,e:1,type:'wide'})}><Text style={styles.controlText}>WD</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>handleAddBall({r:0,e:1,type:'noball'})}><Text style={styles.controlText}>NB</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>handleAddBall({r:0,e:1,type:'legbye'})}><Text style={styles.controlText}>LB</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>handleAddBall({r:0,e:1,type:'bye'})}><Text style={styles.controlText}>BYE</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>{setPendingExtraType('wide');setShowExtraPicker(true);}}><Text style={styles.controlText}>WD</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>{setPendingExtraType('noball');setShowExtraPicker(true);}}><Text style={styles.controlText}>NB</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.controlBtn, styles.extraBtn]} onPress={()=>{setPendingExtraType('legbye');setShowExtraPicker(true);}}><Text style={styles.controlText}>LB/B</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.controlBtn, {backgroundColor: '#F59E0B'}]} onPress={() => {
+                if (Platform.OS === 'web') {
+                  if (window.confirm('Pause match?')) updateMatchStats({ match_state: 'paused' });
+                  return;
+                }
+                Alert.alert('Pause Match', 'Select break type:', [
+                  { text: 'Drinks Break', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                  { text: 'Rain', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                  { text: 'Other', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                  { text: 'Cancel', style: 'cancel' }
+                ]);
+              }}>
+                <Text style={[styles.controlText, {color:COLORS.white, fontSize: 13, fontWeight: '700'}]}>BREAK</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.row}>
               <TouchableOpacity style={[styles.controlBtn, styles.wicketBtn]} onPress={()=>{setSelectionType('wicket');setShowModal(true);}}><Text style={[styles.controlText,{color:COLORS.white}]}>WKT</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.controlBtn, {backgroundColor: '#FEE2E2', borderColor: '#EF4444', borderWidth: 1}]} onPress={handleUndo}><Text style={[styles.controlText, {color: '#EF4444'}]}>UNDO</Text></TouchableOpacity>
             </View>
           </View>
         ) : (
@@ -383,6 +574,7 @@ const styles = StyleSheet.create({
   controlBtn:{flex:1,height:64,backgroundColor:COLORS.white,borderRadius:BORDER_RADIUS.lg,justifyContent:'center',alignItems:'center',borderWidth:1,borderColor:COLORS.border},
   controlText:{fontSize:20,fontWeight:'800',color:COLORS.text},boundaryBtn:{backgroundColor:'#E0F2FE',borderColor:COLORS.primary},boundaryText:{color:COLORS.primary},
   extraBtn:{backgroundColor:'#F8FAFC'},wicketBtn:{backgroundColor:COLORS.danger,borderColor:COLORS.danger},
+  swapBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
   modalOverlay:{flex:1,backgroundColor:'rgba(0,0,0,0.7)',justifyContent:'flex-end'},
   modalContent:{backgroundColor:COLORS.white,borderTopLeftRadius:32,borderTopRightRadius:32,padding:24,maxHeight:'80%'},
   modalHeading:{fontSize:22,fontWeight:'900',color:COLORS.text,marginBottom:16},

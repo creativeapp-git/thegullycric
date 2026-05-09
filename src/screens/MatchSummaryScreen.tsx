@@ -99,16 +99,24 @@ export default function MatchSummaryScreen() {
           <Text style={[styles.cell, { flex: 1.2 }]}>SR</Text>
         </View>
         {data.batting.map((b, i) => (
-          <View key={i} style={styles.tableRow}>
-            <View style={{ flex: 2 }}>
-              <Text style={styles.playerName}>{b.name}</Text>
-              <Text style={styles.dismissalText}>{b.is_out ? (b.dismissal || 'out') : 'not out'}</Text>
+          <View key={i} style={[styles.tableRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 2 }}>
+                <Text style={styles.playerName}>{b.name}</Text>
+                <Text style={styles.dismissalText}>{b.is_out ? (b.dismissal || 'out') : 'not out'}</Text>
+              </View>
+              <Text style={styles.cell}>{b.runs}</Text>
+              <Text style={styles.cell}>{b.balls}</Text>
+              <Text style={styles.cell}>{b.fours}</Text>
+              <Text style={styles.cell}>{b.sixes}</Text>
+              <Text style={[styles.cell, { flex: 1.2 }]}>{b.strike_rate}</Text>
             </View>
-            <Text style={styles.cell}>{b.runs}</Text>
-            <Text style={styles.cell}>{b.balls}</Text>
-            <Text style={styles.cell}>{b.fours}</Text>
-            <Text style={styles.cell}>{b.sixes}</Text>
-            <Text style={[styles.cell, { flex: 1.2 }]}>{b.strike_rate}</Text>
+            <View style={{ flexDirection: 'row', marginTop: 4, opacity: 0.7 }}>
+              <Text style={{ fontSize: 10, color: COLORS.textSecondary, flex: 2 }}></Text>
+              <Text style={{ fontSize: 10, color: COLORS.textSecondary, flex: 4.2, textAlign: 'right' }}>
+                {b.dots !== undefined ? `0s: ${b.dots} | 1s: ${b.ones} | 2s: ${b.twos} | 3s: ${b.threes}` : ''}
+              </Text>
+            </View>
           </View>
         ))}
       </View>
@@ -128,12 +136,22 @@ export default function MatchSummaryScreen() {
           <Text style={[styles.cell, { flex: 1.2 }]}>Eco</Text>
         </View>
         {data.bowling.map((b, i) => (
-          <View key={i} style={styles.tableRow}>
-            <Text style={[styles.playerName, { flex: 2 }]}>{b.name}</Text>
-            <Text style={styles.cell}>{Math.floor(b.balls / 6)}.{b.balls % 6}</Text>
-            <Text style={styles.cell}>{b.runs_conceded}</Text>
-            <Text style={styles.cell}>{b.wickets}</Text>
-            <Text style={[styles.cell, { flex: 1.2 }]}>{b.economy}</Text>
+          <View key={i} style={[styles.tableRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.playerName, { flex: 2 }]}>{b.name}</Text>
+              <Text style={styles.cell}>{Math.floor((b.legalBalls ?? b.balls ?? 0) / 6)}.{(b.legalBalls ?? b.balls ?? 0) % 6}</Text>
+              <Text style={styles.cell}>{b.runs_conceded ?? b.runs}</Text>
+              <Text style={styles.cell}>{b.wickets}</Text>
+              <Text style={[styles.cell, { flex: 1.2 }]}>{b.economy}</Text>
+            </View>
+            {b.dots !== undefined && (
+              <View style={{ flexDirection: 'row', marginTop: 4, opacity: 0.7 }}>
+                <Text style={{ fontSize: 10, color: COLORS.textSecondary, flex: 2 }}></Text>
+                <Text style={{ fontSize: 10, color: COLORS.textSecondary, flex: 4.2, textAlign: 'right' }}>
+                  Dots: {b.dots}
+                </Text>
+              </View>
+            )}
           </View>
         ))}
       </View>

@@ -4,6 +4,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { COLORS, BORDER_RADIUS } from '../theme';
+import { fetchPublicMatchDetails, fetchMatchBalls, followMatch, unfollowMatch, checkIsFollowing } from '../services/userService';
+import { updateMatchStats, updatePlayerStats } from '../services/matchService';
+import { CONFIG } from '../config';
 import { Button, Card } from '../components/UI';
 import { useNotification } from '../context/NotificationContext';
 
@@ -66,6 +69,9 @@ export default function PublicMatchScreen() {
   const [wicketFielder, setWicketFielder] = useState<string|null>(null);
   const [runOutPlayer, setRunOutPlayer] = useState<string|null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [pendingBowlerChange, setPendingBowlerChange] = useState(false);
+  const [showExtraPicker, setShowExtraPicker] = useState(false);
+  const [pendingExtraType, setPendingExtraType] = useState<'legbye'|'bye'|'wide'|'noball'|null>(null);
 
   const fetchBalls = useCallback(async (uuid: string, innings: number) => {
     try {
@@ -99,7 +105,17 @@ export default function PublicMatchScreen() {
         const spectator = !uid || data.created_by !== uid;
         setIsSpectator(spectator);
 
-        if (!spectator && (data.match_state === 'setup' || data.match_state === 'super_over_setup' || (!data.striker && !data.current_bowler && data.match_state !== 'live' && data.match_state !== 'completed'))) {
+        if (
+          !spectator &&
+          data.match_state !== 'completed' &&
+          (
+            data.match_state === 'setup' ||
+            data.match_state === 'super_over_setup' ||
+            !data.striker ||
+            !data.non_striker ||
+            !data.current_bowler
+          )
+        ) {
           setSelectionType('initial'); setShowModal(true);
         }
         await fetchBalls(data.id, data.current_innings || 1);
@@ -175,8 +191,11 @@ export default function PublicMatchScreen() {
 
         setInningsBalls((prev: any[]) => [...prev, ball]);
         if (ball.is_legal !== false) {
-          setTotalLegalBalls(prev => prev + 1);
-          setCurrentOverNum(prev => Math.floor((prev + 1) / 6));
+          setTotalLegalBalls(prev => {
+            const next = prev + 1;
+            setCurrentOverNum(Math.floor(next / 6));
+            return next;
+          });
         }
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -196,10 +215,15 @@ export default function PublicMatchScreen() {
   const wicketsField = match?.current_innings === 1 ? 'wickets1' : 'wickets2';
   
   const outPlayers = match?.out_players || [];
-  const battingTeamPlayers = (match?.current_innings === 1 || match?.current_innings === 3) ? match?.team1_players : match?.team2_players;
-  const bowlingTeamPlayers = (match?.current_innings === 1 || match?.current_innings === 3) ? match?.team2_players : match?.team1_players;
+  const battingFirst = match?.toss_decision === 'Bat' ? match?.toss_winner : (match?.toss_winner === match?.team1 ? match?.team2 : match?.team1);
+  const battingSecond = battingFirst === match?.team1 ? match?.team2 : match?.team1;
+  const battingTeamName = match?.current_innings === 1 || match?.current_innings === 3 ? battingFirst : battingSecond;
+  
+  const battingTeamPlayers = battingTeamName === match?.team1 ? (match?.team1_players || match?.team1Players) : (match?.team2_players || match?.team2Players);
+  const bowlingTeamPlayers = battingTeamName === match?.team1 ? (match?.team2_players || match?.team2Players) : (match?.team1_players || match?.team1Players);
   const availableBatters = (battingTeamPlayers || []).filter((p: string) => !outPlayers.includes(p));
   const availableBowlers = (bowlingTeamPlayers || []).filter((p: string) => p !== match?.last_bowler);
+  const maxWickets = (battingTeamPlayers?.length ?? 11) - 1;
 
   const getBowlerStats = (bName: string) => {
     const bBalls = inningsBalls.filter((b: any) => b.bowler === bName);
@@ -207,6 +231,13 @@ export default function PublicMatchScreen() {
     const runs = bBalls.filter((b: any) => b.extra_type !== 'bye' && b.extra_type !== 'legbye').reduce((sum: number, b: any) => sum + (b.runs || 0) + (b.extras || 0), 0);
     const wkts = bBalls.filter((b: any) => b.is_wicket && b.wicket_type !== 'runout').length;
     return `${Math.floor(legal / 6)}.${legal % 6}-${runs}-${wkts}`;
+  };
+
+  const getBatterStats = (pName: string) => {
+    const bBalls = inningsBalls.filter(b => b.batter === pName);
+    const runs = bBalls.filter(b => b.extra_type !== 'bye' && b.extra_type !== 'legbye').reduce((sum, b) => sum + (b.runs || 0), 0);
+    const balls = bBalls.filter(b => b.is_legal !== false).length;
+    return `${runs} (${balls})`;
   };
 
   const handleShare = async () => {
@@ -258,7 +289,7 @@ export default function PublicMatchScreen() {
   const updatePlayerStats = async (player: string, team: string, stats: any) => {
     if (!matchUuid) return;
     try {
-      const { data: existing } = await supabase.from('match_players').select('*').eq('match_id', matchUuid).eq('player_name', player).single();
+      const { data: existing } = await supabase.from('match_players').select('*').eq('match_id', matchUuid).eq('player_name', player).maybeSingle();
       if (existing) {
         const nextStats = { ...stats };
         for (const k in stats) { if (typeof stats[k] === 'number') nextStats[k] = (existing[k] || 0) + stats[k]; }
@@ -332,11 +363,17 @@ export default function PublicMatchScreen() {
       }
 
       const lastB = balls[balls.length - 1];
+      const outPlayers = balls
+        .filter((b) => b.is_wicket)
+        .map((b) => b.dismissed_player || b.batter)
+        .filter(Boolean);
       const updates: any = {
         score1: s1, wickets1: w1, score2: s2, wickets2: w2,
         winner: null,
         striker: lastB?.batter || null,
+        non_striker: match?.non_striker || null,
         current_bowler: lastB?.bowler || null,
+        out_players: outPlayers,
         match_state: balls.length > 0 ? 'live' : 'setup'
       };
       await updateMatchStats(updates);
@@ -348,30 +385,65 @@ export default function PublicMatchScreen() {
 
   const handleUndo = async () => {
     if (isSubmitting || !matchUuid) return;
+    const undo = async () => {
+      setIsSubmitting(true);
+      try {
+        const { data: lastBall } = await supabase
+          .from('balls')
+          .select('*')
+          .eq('match_id', matchUuid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastBall) {
+          const { error: deleteError } = await supabase.from('balls').delete().eq('id', lastBall.id);
+          if (deleteError) throw deleteError;
+
+          const { data: balls } = await supabase
+            .from('balls')
+            .select('*')
+            .eq('match_id', matchUuid)
+            .order('created_at', { ascending: true });
+          await recalculateMatchState(balls || []);
+          await updateMatchStats({
+            striker: lastBall.batter || match?.striker || null,
+            non_striker: match?.non_striker || null,
+            current_bowler: lastBall.bowler || match?.current_bowler || null,
+            match_state: (balls || []).length > 0 ? 'live' : 'setup',
+          });
+          await fetchBalls(matchUuid, match.current_innings || 1);
+        }
+      } catch (e) { console.error(e); }
+      finally { setIsSubmitting(false); }
+    };
+
+    if (Platform.OS === 'web') {
+      if (!window.confirm('Delete last ball and recalculate?')) return;
+      undo();
+      return;
+    }
+
     Alert.alert("Undo", "Delete last ball and recalculate?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Undo", style: "destructive", onPress: async () => {
-        setIsSubmitting(true);
-        try {
-          const { data: lastBall } = await supabase.from('balls').select('id').eq('match_id', matchUuid).order('created_at', { ascending: false }).limit(1).maybeSingle();
-          if (lastBall) {
-            await supabase.from('balls').delete().eq('id', lastBall.id);
-            const { data: balls } = await supabase.from('balls').select('*').eq('match_id', matchUuid).order('created_at', { ascending: true });
-            await recalculateMatchState(balls || []);
-          }
-        } catch (e) { console.error(e); }
-        finally { setIsSubmitting(false); }
-      }}
+      { text: "Undo", style: "destructive", onPress: undo }
     ]);
   };
 
   const handleAddBall = async (p: { r: number; e: number; type?: string; isW?: boolean; wType?: string; dismissedPlayer?: string }) => {
     if (isSubmitting || !isLive || isSpectator || isOffline) return;
+    if (!match?.striker || !match?.non_striker || !match?.current_bowler) {
+      setSelectionType('initial');
+      setShowModal(true);
+      setErrorMessage('Select striker, non-striker, and bowler before scoring.');
+      return;
+    }
+
     setIsSubmitting(true); setErrorMessage('');
     try {
       // Pre-flight check to block duplicate insertions
       const { data: lastBall } = await supabase.from('balls').select('over, ball').eq('match_id', matchUuid).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const targetBallNum = totalLegalBalls + 1;
+      const targetBallNum = inningsBalls.length + 1;
       if (lastBall && lastBall.over === currentOverNum && lastBall.ball === targetBallNum) {
 
         setTimeout(() => setIsSubmitting(false), 300); // 300ms debounce
@@ -382,7 +454,8 @@ export default function PublicMatchScreen() {
       const isByeOrLegBye = p.type === 'bye' || p.type === 'legbye';
       let ballRuns = p.r, ballExtras = p.e, runsToBatter = p.r, runsToBowler = p.r + p.e;
       if (isByeOrLegBye) { runsToBatter = 0; runsToBowler = 0; }
-      if (!isLegal) { runsToBatter = 0; ballRuns = 0; }
+      // No ball: batter gets credited for runs hit; Wide: batter gets 0
+      if (p.type === 'wide') { runsToBatter = 0; ballRuns = 0; }
       const wTypeNormalized = p.wType ? p.wType.toLowerCase().replace(/\s/g, '') : null;
 
       try {
@@ -404,9 +477,11 @@ export default function PublicMatchScreen() {
         throw err;
       }
 
-      await updatePlayerStats(match.striker, match.current_innings===1?match.team1:match.team2, { runs_scored: runsToBatter, balls_faced: isLegal ? 1 : 0, fours: runsToBatter === 4 ? 1 : 0, sixes: runsToBatter === 6 ? 1 : 0 });
-      await updatePlayerStats(match.current_bowler, match.current_innings===1?match.team2:match.team1, { runs_conceded: isByeOrLegBye ? 0 : runsToBowler, balls_bowled: isLegal ? 1 : 0, wickets_taken: p.isW && wTypeNormalized !== 'runout' ? 1 : 0 });
-      if (p.isW && p.dismissedPlayer) await updatePlayerStats(p.dismissedPlayer, match.current_innings===1?match.team1:match.team2, { is_out: true });
+      const bTeam = battingTeamName || match.team1;
+      const fTeam = bTeam === match.team1 ? match.team2 : match.team1;
+      await updatePlayerStats(match.striker, bTeam, { runs_scored: runsToBatter, balls_faced: isLegal ? 1 : 0, fours: runsToBatter === 4 ? 1 : 0, sixes: runsToBatter === 6 ? 1 : 0 });
+      await updatePlayerStats(match.current_bowler, fTeam, { runs_conceded: isByeOrLegBye ? 0 : runsToBowler, balls_bowled: isLegal ? 1 : 0, wickets_taken: p.isW && wTypeNormalized !== 'runout' ? 1 : 0 });
+      if (p.isW && p.dismissedPlayer) await updatePlayerStats(p.dismissedPlayer, bTeam, { is_out: true });
 
       let nextStriker = match.striker, nextNon = match.non_striker, nextBowler = match.current_bowler;
       let lastBowler = match.last_bowler, nextState = 'live';
@@ -424,16 +499,15 @@ export default function PublicMatchScreen() {
 
       const newTotalLegal = totalLegalBalls + (isLegal ? 1 : 0);
       const isOverEnd = isLegal && (newTotalLegal % 6 === 0);
-      if (isOverEnd) { [nextStriker, nextNon] = [nextNon, nextStriker]; lastBowler = nextBowler; nextBowler = null; if (nextState !== 'wicket_fall') nextState = 'over_break'; }
+      if (isOverEnd) { [nextStriker, nextNon] = [nextNon, nextStriker]; lastBowler = nextBowler; nextBowler = null; setPendingBowlerChange(true); if (nextState !== 'wicket_fall') nextState = 'over_break'; }
 
       const isChasing = match.current_innings === 2 || match.current_innings === 4;
       let winner = match.winner, newTarget = match.target;
+      const battingTeam = battingTeamName || match.team1;
+      const fieldingTeam = battingTeam === match.team1 ? match.team2 : match.team1;
       if (isChasing) {
-        // For super over target, we calculate it from previous balls (innings 3)
         let target = match.target;
         if (match.current_innings === 4 && !target) {
-          // This case shouldn't happen if break is handled correctly, but for safety:
-          // We'd need the score from innings 3. For now, assume target is set in state.
           target = match.target;
         } else if (match.current_innings === 2) {
           target = match.target || ((match.score1 || 0) + 1);
@@ -441,9 +515,9 @@ export default function PublicMatchScreen() {
 
         if (target && newScore >= target) { 
           nextState = 'completed'; 
-          winner = match.team2; 
+          winner = battingTeam; 
         }
-        else if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : 10)) {
+        else if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : maxWickets)) {
           if (target && newScore === target - 1) {
             if (match.current_innings === 2 && match.allow_super_over) {
               nextState = 'super_over_setup';
@@ -453,11 +527,11 @@ export default function PublicMatchScreen() {
             }
           } else {
             nextState = 'completed';
-            winner = match.team1;
+            winner = fieldingTeam;
           }
         }
       } else {
-        if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : 10)) { 
+        if (newTotalLegal >= maxBalls || newWickets >= (isSuperOver ? 2 : maxWickets)) { 
           nextState = isSuperOver ? 'super_over_break' : 'innings_break'; 
           newTarget = newScore + 1; 
         }
@@ -469,7 +543,14 @@ export default function PublicMatchScreen() {
         updates[wicketsField] = newWickets;
       }
       
-      if (nextState === 'super_over_setup') {
+      if (nextState === 'innings_break') {
+        updates.current_innings = 2;
+        updates.striker = null;
+        updates.non_striker = null;
+        updates.current_bowler = null;
+        updates.last_bowler = null;
+        updates.out_players = [];
+      } else if (nextState === 'super_over_setup') {
         updates.current_innings = 3;
         updates.target = null;
         updates.out_players = [];
@@ -490,13 +571,16 @@ export default function PublicMatchScreen() {
       if (winner && nextState !== 'super_over_setup' && nextState !== 'super_over_break') updates.winner = winner;
       if (newTarget) updates.target = newTarget;
       await updateMatchStats(updates);
+      if (matchUuid) await fetchBalls(matchUuid, match.current_innings);
 
-      if (nextState === 'wicket_fall') { setSelectionType('batter'); setShowModal(true); }
+      if (nextState === 'innings_break') { setSelectionType('initial'); setShowModal(true); }
+      else if (nextState === 'wicket_fall') { setSelectionType('batter'); setShowModal(true); }
       else if (nextState === 'over_break') { setSelectionType('bowler'); setShowModal(true); }
       else if (nextState === 'super_over_setup' || nextState === 'super_over_break') { setSelectionType('initial'); setShowModal(true); }
       
       setTimeout(() => setIsSubmitting(false), 300); // 300ms debounce
     } catch(e: any) { 
+      console.error('Add ball failed:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
       setErrorMessage(e.message); 
       setIsSubmitting(false);
     }
@@ -522,7 +606,28 @@ export default function PublicMatchScreen() {
       setShowModal(false);
     } catch(e) {}
     finally { 
+      if (selectionType === 'batter' && pendingBowlerChange) {
+        setPendingBowlerChange(false);
+        setTimeout(() => { setSelectedBowler(null); setSelectionType('bowler'); setShowModal(true); }, 300);
+      } else if (selectionType === 'bowler' || selectionType === 'initial') {
+        setPendingBowlerChange(false);
+      }
       setTimeout(() => setIsSubmitting(false), 300);
+    }
+  };
+
+  const handleSwapStrikers = async () => {
+    if (isSubmitting || isSpectator || !match?.striker || !match?.non_striker) return;
+    setIsSubmitting(true);
+    try {
+      await updateMatchStats({
+        striker: match.non_striker,
+        non_striker: match.striker
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -565,6 +670,36 @@ export default function PublicMatchScreen() {
           <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>You are offline. Reconnecting...</Text>
         </View>
       )}
+      {!isSpectator && (
+        <Modal visible={showExtraPicker} transparent animationType="fade">
+          <View style={s.modalOverlay}><View style={[s.modalContent, { maxHeight: '60%' }]}>
+            <Text style={s.modalHeading}>{
+              pendingExtraType === 'legbye' ? 'LEG BYES' : 
+              pendingExtraType === 'noball' ? 'RUNS OFF NO BALL' : 
+              pendingExtraType === 'wide' ? 'EXTRA WIDE RUNS' : 'BYES'
+            }</Text>
+            <View style={{ flexDirection: 'row', gap: 24, justifyContent: 'center', marginTop: 24, marginBottom: 16, flexWrap: 'wrap' }}>
+              {[0, 1, 2, 3, 4, 6].map(n => (
+                <TouchableOpacity key={n} style={[s.controlBtn, { flex: 0, width: 72, height: 72 }]} onPress={() => {
+                  setShowExtraPicker(false);
+                  if (pendingExtraType === 'noball') {
+                    handleAddBall({ r: n, e: match?.rules?.noBallExtraRun !== false ? 1 : 0, type: 'noball' });
+                  } else if (pendingExtraType === 'wide') {
+                    handleAddBall({ r: 0, e: n + (match?.rules?.wideExtraRun !== false ? 1 : 0), type: 'wide' });
+                  } else {
+                    handleAddBall({ r: 0, e: n, type: pendingExtraType! });
+                  }
+                }}>
+                  <Text style={s.controlText}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity onPress={() => setShowExtraPicker(false)} style={{ alignItems: 'center', marginTop: 16, padding: 12 }}>
+              <Text style={{ color: COLORS.textSecondary, fontWeight: '700', fontSize: 16 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View></View>
+        </Modal>
+      )}
       {/* Selection Modal (creator only) */}
       {!isSpectator && (
         <Modal visible={showModal} transparent animationType="slide">
@@ -595,7 +730,12 @@ export default function PublicMatchScreen() {
           <TouchableOpacity onPress={toggleFollow} style={s.shareBtn}>
             <Ionicons name={isFollowing ? "heart" : "heart-outline"} size={22} color={isFollowing ? COLORS.danger : COLORS.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleShare} style={s.shareBtn}>
+          <TouchableOpacity onPress={async () => {
+            if (!matchUuid) return;
+            const origin = Platform.OS === 'web' ? window.location.origin : CONFIG.APP_URL;
+            const url = `${origin}/match/${matchUuid}`;
+            await Share.share({ message: `Follow the match live at: ${url}` });
+          }} style={s.shareBtn}>
             <Ionicons name="share-social" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
@@ -624,8 +764,23 @@ export default function PublicMatchScreen() {
             </Text>
           )}
           <View style={s.playersRow}>
-            <View style={s.playerBox}><Text style={s.pLabel}>BATTER</Text><Text style={s.pName}>🏏 {match.striker || '-'}</Text></View>
-            <View style={s.playerBox}><Text style={s.pLabel}>NON-STRIKER</Text><Text style={s.pName}>🏃 {match.non_striker || '-'}</Text></View>
+            <View style={s.playerCol}>
+              <Text style={s.playerRole}>BATTER</Text>
+              <Text style={s.playerName}>🏏 {match?.striker || '-'}</Text>
+              <Text style={s.playerStats}>{match?.striker ? getBatterStats(match.striker) : ''}</Text>
+            </View>
+            <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+              {!isSpectator && (
+                <TouchableOpacity onPress={handleSwapStrikers} style={s.swapBtn}>
+                  <Ionicons name="swap-horizontal" size={24} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={s.playerCol}>
+              <Text style={s.playerRole}>NON-STRIKER</Text>
+              <Text style={s.playerName}>🏃 {match?.non_striker || '-'}</Text>
+              <Text style={s.playerStats}>{match?.non_striker ? getBatterStats(match.non_striker) : ''}</Text>
+            </View>
             <View style={s.playerBox}><Text style={s.pLabel}>BOWLER</Text><Text style={s.pName}>⚾ {match.current_bowler || '-'}{'\n'}({getBowlerStats(match.current_bowler || '')})</Text></View>
           </View>
         </Card>
@@ -653,13 +808,27 @@ export default function PublicMatchScreen() {
                 <View style={s.row}>{[0, 1, 2, 3].map(r => (<TouchableOpacity key={r} style={s.controlBtn} onPress={() => handleAddBall({ r, e: 0 })}><Text style={s.controlText}>{r}</Text></TouchableOpacity>))}</View>
                 <View style={s.row}>
                   {[4, 6].map(r => (<TouchableOpacity key={r} style={[s.controlBtn, s.boundaryBtn]} onPress={() => handleAddBall({ r, e: 0 })}><Text style={[s.controlText, s.boundaryText]}>{r}</Text></TouchableOpacity>))}
-                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => handleAddBall({ r: 0, e: 1, type: 'wide' })}><Text style={s.controlText}>WD</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => handleAddBall({ r: 0, e: 1, type: 'noball' })}><Text style={s.controlText}>NB</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => handleAddBall({ r: 0, e: 1, type: 'legbye' })}><Text style={s.controlText}>LB</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => handleAddBall({ r: 0, e: 1, type: 'bye' })}><Text style={s.controlText}>BYE</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => { setPendingExtraType('wide'); setShowExtraPicker(true); }}><Text style={s.controlText}>WD</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => { setPendingExtraType('noball'); setShowExtraPicker(true); }}><Text style={s.controlText}>NB</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.controlBtn, s.extraBtn]} onPress={() => { setPendingExtraType('legbye'); setShowExtraPicker(true); }}><Text style={s.controlText}>LB/B</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.controlBtn, {backgroundColor: '#F59E0B'}]} onPress={() => {
+                    if (Platform.OS === 'web') {
+                      if (window.confirm('Pause match?')) updateMatchStats({ match_state: 'paused' });
+                      return;
+                    }
+                    Alert.alert('Pause Match', 'Select break type:', [
+                      { text: 'Drinks Break', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                      { text: 'Rain', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                      { text: 'Other', onPress: () => updateMatchStats({ match_state: 'paused' }) },
+                      { text: 'Cancel', style: 'cancel' }
+                    ]);
+                  }}>
+                    <Text style={[s.controlText, {color:COLORS.white, fontSize: 13, fontWeight: '700'}]}>BREAK</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={s.row}>
                   <TouchableOpacity style={[s.controlBtn, s.wicketBtn]} onPress={() => { setSelectionType('wicket'); setShowModal(true); }}><Text style={[s.controlText, { color: COLORS.white }]}>WKT</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.controlBtn, s.undoBtn]} onPress={handleUndo}><Text style={[s.controlText, { color: '#EF4444' }]}>UNDO</Text></TouchableOpacity>
                 </View>
               </View>
             ) : (
@@ -825,39 +994,211 @@ export default function PublicMatchScreen() {
           </Card>
         )}
 
-        {activeTab === 'Insights' && (
-          <Card style={{ padding: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', marginBottom: 20, color: COLORS.primary }}>Run Rate Graph</Text>
-            {inningsBalls.length === 0 ? (
-              <Text style={s.emptyText}>No data yet.</Text>
-            ) : (() => {
-              const runsPerOverMap = inningsBalls.reduce((acc, ball) => {
-                if (!acc[ball.over]) acc[ball.over] = 0;
-                acc[ball.over] += (ball.runs || 0) + (ball.extras || 0);
-                return acc;
-              }, {} as Record<number, number>);
-              const maxInningsRuns = Math.max(...(Object.values(runsPerOverMap) as number[]), 6);
-              
-              return (
-                <View style={{ height: 200, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#CBD5E1', borderLeftWidth: 1, borderLeftColor: '#CBD5E1', paddingBottom: 5, paddingLeft: 5 }}>
-                  {Object.entries(runsPerOverMap).map(([over, runsVal]) => {
-                    const runs = runsVal as number;
-                    const height = (runs / maxInningsRuns) * 180;
-                    return (
-                      <View key={over} style={{ flex: 1, alignItems: 'center' }}>
-                        <View style={{ width: '70%', height: Math.max(height, 2), backgroundColor: COLORS.primary, borderRadius: 4, justifyContent: 'flex-end' }}>
-                          {runs > 0 && <Text style={{ fontSize: 9, color: COLORS.white, fontWeight: '700', textAlign: 'center', marginBottom: 2 }}>{runs}</Text>}
+        {activeTab === 'Insights' && (() => {
+          // Compute all balls for both innings
+          const allBallsForInsights = inningsBalls;
+
+          // Compute per-over data for current innings
+          const runsPerOver: Record<number, number> = {};
+          const wicketsPerOver: Record<number, number> = {};
+          let cumulative = 0;
+          const cumulativeByOver: Record<number, number> = {};
+          
+          allBallsForInsights.forEach(b => {
+            const o = b.over;
+            runsPerOver[o] = (runsPerOver[o] || 0) + (b.runs || 0) + (b.extras || 0);
+            if (b.is_wicket) wicketsPerOver[o] = (wicketsPerOver[o] || 0) + 1;
+          });
+
+          const overKeys = Object.keys(runsPerOver).map(Number).sort((a, b) => a - b);
+          overKeys.forEach(o => {
+            cumulative += runsPerOver[o];
+            cumulativeByOver[o] = cumulative;
+          });
+
+          const maxOverRuns = Math.max(...Object.values(runsPerOver), 6);
+          const maxCumulative = Math.max(...Object.values(cumulativeByOver), 1);
+
+          // Scoring breakdown
+          let dots = 0, ones = 0, twos = 0, threes = 0, fours = 0, sixes = 0, extras = 0;
+          allBallsForInsights.forEach(b => {
+            if (b.extra_type) { extras++; return; }
+            const r = b.runs || 0;
+            if (r === 0) dots++;
+            else if (r === 1) ones++;
+            else if (r === 2) twos++;
+            else if (r === 3) threes++;
+            else if (r === 4) fours++;
+            else if (r === 6) sixes++;
+          });
+          const totalDeliveries = dots + ones + twos + threes + fours + sixes + extras;
+
+          // Run rate per over
+          const runRateByOver: Record<number, number> = {};
+          let runsSoFar = 0;
+          overKeys.forEach((o, idx) => {
+            runsSoFar += runsPerOver[o];
+            runRateByOver[o] = parseFloat((runsSoFar / (idx + 1)).toFixed(2));
+          });
+          const maxRR = Math.max(...Object.values(runRateByOver), 1);
+
+          // Color palette for scoring zones
+          const zoneColors: Record<string, string> = {
+            Dots: '#94A3B8', '1s': '#38BDF8', '2s': '#10B981',
+            '3s': '#F59E0B', '4s': '#8B5CF6', '6s': '#EF4444', 'Extras': '#F97316'
+          };
+          const zones = [
+            { label: 'Dots', count: dots, color: zoneColors.Dots },
+            { label: '1s', count: ones, color: zoneColors['1s'] },
+            { label: '2s', count: twos, color: zoneColors['2s'] },
+            { label: '3s', count: threes, color: zoneColors['3s'] },
+            { label: '4s', count: fours, color: zoneColors['4s'] },
+            { label: '6s', count: sixes, color: zoneColors['6s'] },
+            { label: 'Extras', count: extras, color: zoneColors.Extras },
+          ].filter(z => z.count > 0);
+
+          const currentRR = totalLegalBalls > 0 ? ((currentScore / totalLegalBalls) * 6).toFixed(2) : '0.00';
+          const boundaryPerc = totalDeliveries > 0 ? (((fours + sixes) / totalDeliveries) * 100).toFixed(1) : '0.0';
+          const dotPerc = totalDeliveries > 0 ? ((dots / totalDeliveries) * 100).toFixed(1) : '0.0';
+
+          return (
+            <View style={{ gap: 16 }}>
+              {/* ── RUNS PER OVER ── */}
+              <Card style={{ padding: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', marginBottom: 16, color: COLORS.primary }}>📊 Runs Per Over</Text>
+                {overKeys.length === 0 ? (
+                  <Text style={s.emptyText}>No data yet.</Text>
+                ) : (
+                  <>
+                    <View style={{ height: 180, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', borderLeftWidth: 1, borderLeftColor: '#E2E8F0', paddingBottom: 4, paddingLeft: 4 }}>
+                      {overKeys.map(over => {
+                        const runs = runsPerOver[over];
+                        const height = (runs / maxOverRuns) * 160;
+                        const hasWicket = (wicketsPerOver[over] || 0) > 0;
+                        return (
+                          <View key={over} style={{ flex: 1, alignItems: 'center' }}>
+                            {hasWicket && <Text style={{ fontSize: 8, color: COLORS.danger, fontWeight: '800', marginBottom: 2 }}>W</Text>}
+                            <View style={{ width: '70%', height: Math.max(height, 2), backgroundColor: hasWicket ? COLORS.danger : COLORS.primary, borderRadius: 4, justifyContent: 'flex-end' }}>
+                              {runs > 0 && <Text style={{ fontSize: 9, color: '#FFF', fontWeight: '700', textAlign: 'center', marginBottom: 2 }}>{runs}</Text>}
+                            </View>
+                            <Text style={{ fontSize: 9, color: COLORS.textSecondary, marginTop: 4, fontWeight: '600' }}>{over + 1}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    <Text style={{ textAlign: 'center', fontSize: 10, color: COLORS.textSecondary, marginTop: 8, fontWeight: '600' }}>Overs</Text>
+                  </>
+                )}
+              </Card>
+
+              {/* ── SCORE WORM (Cumulative) ── */}
+              <Card style={{ padding: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', marginBottom: 16, color: COLORS.primary }}>🐛 Score Worm</Text>
+                {overKeys.length === 0 ? (
+                  <Text style={s.emptyText}>No data yet.</Text>
+                ) : (
+                  <View style={{ height: 160, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', borderLeftWidth: 1, borderLeftColor: '#E2E8F0', paddingLeft: 4, paddingBottom: 4 }}>
+                    {/* Y-axis labels */}
+                    <View style={{ position: 'absolute', left: -30, top: 0, bottom: 20, justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 8, color: COLORS.textSecondary }}>{maxCumulative}</Text>
+                      <Text style={{ fontSize: 8, color: COLORS.textSecondary }}>{Math.round(maxCumulative / 2)}</Text>
+                      <Text style={{ fontSize: 8, color: COLORS.textSecondary }}>0</Text>
+                    </View>
+                    {/* SVG-like line using absolute positioned dots */}
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end' }}>
+                      {overKeys.map((over, idx) => {
+                        const score = cumulativeByOver[over];
+                        const y = (score / maxCumulative) * 140;
+                        return (
+                          <View key={over} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                            <View style={{ height: y, width: 2, backgroundColor: '#10B981', borderRadius: 1 }} />
+                            <View style={{ position: 'absolute', bottom: y - 4, width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                            <Text style={{ fontSize: 7, color: COLORS.textSecondary, marginTop: 4 }}>{over + 1}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+              </Card>
+
+              {/* ── RUN RATE TREND ── */}
+              <Card style={{ padding: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', marginBottom: 16, color: COLORS.primary }}>📈 Run Rate Trend</Text>
+                {overKeys.length === 0 ? (
+                  <Text style={s.emptyText}>No data yet.</Text>
+                ) : (
+                  <View style={{ height: 140, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', borderLeftWidth: 1, borderLeftColor: '#E2E8F0', paddingBottom: 4, paddingLeft: 4 }}>
+                    {overKeys.map(over => {
+                      const rr = runRateByOver[over];
+                      const height = (rr / maxRR) * 120;
+                      return (
+                        <View key={over} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <View style={{ height: Math.max(height, 2), width: 2, backgroundColor: '#F59E0B', borderRadius: 1 }} />
+                          <View style={{ position: 'absolute', bottom: Math.max(height - 4, 0), width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' }} />
+                          <Text style={{ fontSize: 7, color: COLORS.textSecondary, marginTop: 4 }}>{over + 1}</Text>
                         </View>
-                        <Text style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{Number(over) + 1}</Text>
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
+                )}
+                <Text style={{ textAlign: 'center', fontSize: 10, color: COLORS.textSecondary, marginTop: 8, fontWeight: '600' }}>Current RR: {currentRR}</Text>
+              </Card>
+
+              {/* ── SCORING BREAKDOWN ── */}
+              <Card style={{ padding: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', marginBottom: 16, color: COLORS.primary }}>🎯 Scoring Breakdown</Text>
+                {totalDeliveries === 0 ? (
+                  <Text style={s.emptyText}>No data yet.</Text>
+                ) : (
+                  <>
+                    {/* Horizontal stacked bar */}
+                    <View style={{ height: 32, flexDirection: 'row', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+                      {zones.map(z => (
+                        <View key={z.label} style={{ flex: z.count, backgroundColor: z.color, justifyContent: 'center', alignItems: 'center' }}>
+                          {z.count / totalDeliveries > 0.08 && (
+                            <Text style={{ fontSize: 10, color: '#FFF', fontWeight: '700' }}>{z.label}</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                    {/* Legend */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                      {zones.map(z => (
+                        <View key={z.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: z.color }} />
+                          <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600' }}>{z.label}: {z.count} ({totalDeliveries > 0 ? ((z.count / totalDeliveries) * 100).toFixed(0) : 0}%)</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </Card>
+
+              {/* ── KEY STATS ── */}
+              <Card style={{ padding: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '800', marginBottom: 16, color: COLORS.primary }}>📋 Key Stats</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  {[
+                    { label: 'Current RR', value: currentRR },
+                    { label: 'Boundary %', value: `${boundaryPerc}%` },
+                    { label: 'Dot Ball %', value: `${dotPerc}%` },
+                    { label: 'Fours', value: String(fours) },
+                    { label: 'Sixes', value: String(sixes) },
+                    { label: 'Extras', value: String(extras) },
+                    { label: 'Wickets', value: String(currentWickets) },
+                    { label: 'Overs', value: `${Math.floor(totalLegalBalls / 6)}.${totalLegalBalls % 6}` },
+                  ].map(stat => (
+                    <View key={stat.label} style={{ backgroundColor: '#F1F5F9', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, minWidth: '45%', flex: 1, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '900', color: COLORS.primary }}>{stat.value}</Text>
+                      <Text style={{ fontSize: 11, color: COLORS.textSecondary, fontWeight: '600', marginTop: 4 }}>{stat.label}</Text>
+                    </View>
+                  ))}
                 </View>
-              );
-            })()}
-            <Text style={{ textAlign: 'center', fontSize: 11, color: COLORS.textSecondary, marginTop: 12 }}>Overs</Text>
-          </Card>
-        )}
+              </Card>
+            </View>
+          );
+        })()}
       </ScrollView>
     </View>
   );
@@ -889,6 +1230,8 @@ const s = StyleSheet.create({
   boundaryText: { color: COLORS.primary },
   extraBtn: { backgroundColor: '#F8FAFC' },
   wicketBtn: { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
+  swapBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
+  undoBtn: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
   spectatorCard: { backgroundColor: '#1E293B', padding: 32, borderRadius: BORDER_RADIUS.xl, alignItems: 'center' },
   spectatorTitle: { color: '#F8FAFC', fontSize: 18, fontWeight: '800', marginTop: 8 },
   spectatorStatus: { color: '#94A3B8', fontSize: 13, fontWeight: '600', marginTop: 4 },

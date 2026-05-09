@@ -110,7 +110,8 @@ const MatchDetailScreen = () => {
   const handleShare = async () => {
     if (!match) return;
     try {
-      const url = `${window.location.origin}/match/${match.matchId}`;
+      const origin = Platform.OS === 'web' ? window.location.origin : 'https://thegullycric.web.app';
+      const url = `${origin}/match/${match.match_id || match.matchId}`;
       const message = `🏏 Watch ${match.team1} vs ${match.team2} live on GullyCric!\n\nScore: ${match.score1 || '0/0'}\n\nView here: ${url}`;
       
       if (Platform.OS === 'web') {
@@ -172,7 +173,7 @@ const MatchDetailScreen = () => {
           <Text style={s.infoText}><Text style={s.infoLabel}>Location:</Text> {match.location}</Text>
           <Text style={s.infoText}><Text style={s.infoLabel}>Format:</Text> {match.type} ({match.overs} Overs)</Text>
           <Text style={s.infoText}><Text style={s.infoLabel}>Date:</Text> {match.date} at {match.time}</Text>
-          <Text style={s.infoText}><Text style={s.infoLabel}>Match ID:</Text> {match.matchId}</Text>
+          <Text style={s.infoText}><Text style={s.infoLabel}>Match ID:</Text> {match.match_id || match.matchId}</Text>
           {match.description && <Text style={s.infoText}><Text style={s.infoLabel}>Bio:</Text> {match.description}</Text>}
         </View>
 
@@ -186,17 +187,17 @@ const MatchDetailScreen = () => {
         <View style={{ flexDirection: 'row', gap: 16 }}>
           <View style={[s.card, { flex: 1 }]}>
             <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
-              {match.team1Logo && <Text style={{fontSize: 20, marginRight: 8}}>{match.team1Logo}</Text>}
+              {(match.team1_logo || match.team1Logo) && <Text style={{fontSize: 20, marginRight: 8}}>{match.team1_logo || match.team1Logo}</Text>}
               <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team1}</Text>
             </View>
-            {match.team1Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+            {(match.team1_players || match.team1Players || []).map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
           </View>
           <View style={[s.card, { flex: 1 }]}>
             <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 12}}>
-              {match.team2Logo && <Text style={{fontSize: 20, marginRight: 8}}>{match.team2Logo}</Text>}
+              {(match.team2_logo || match.team2Logo) && <Text style={{fontSize: 20, marginRight: 8}}>{match.team2_logo || match.team2Logo}</Text>}
               <Text style={[s.cardTitle, {marginBottom: 0}]}>{match.team2}</Text>
             </View>
-            {match.team2Players?.map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
+            {(match.team2_players || match.team2Players || []).map((p, i) => <Text key={i} style={s.playerItem}>{p}</Text>)}
           </View>
         </View>
       </View>

@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 const IS_DEV = __DEV__;
 
 class PerfLogger {
@@ -15,19 +13,19 @@ class PerfLogger {
     const start = this.marks[startMark];
     if (!start) return;
     const duration = performance.now() - start;
-    console.log(`⏱️ [PERF] ${name}: ${duration.toFixed(2)}ms`);
+    console.log(`[PERF] ${name}: ${duration.toFixed(2)}ms`);
     return duration;
   }
 
   logRender(componentName: string) {
     if (!IS_DEV) return;
-    console.log(`🔄 [RENDER] ${componentName}`);
+    console.log(`[RENDER] ${componentName}`);
   }
 
   logQuery(queryName: string, durationMs: number) {
     if (!IS_DEV) return;
-    const icon = durationMs > 500 ? '⚠️' : '⚡';
-    console.log(`${icon} [QUERY] ${queryName} took ${durationMs.toFixed(2)}ms`);
+    const level = durationMs > 500 ? 'SLOW QUERY' : 'QUERY';
+    console.log(`[${level}] ${queryName} took ${durationMs.toFixed(2)}ms`);
   }
 }
 

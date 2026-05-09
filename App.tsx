@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, createContext } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { LinkingOptions, NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './src/services/supabase';
@@ -9,8 +9,8 @@ import { PWAProvider } from './src/context/PWAContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ProfileRefreshContext } from './src/services/profileContext';
+import { RootStackParamList } from './src/navigation/navigation.types';
 
-// ── Web global styles ──────────────────────────────────────────────────────────
 if (Platform.OS === 'web') {
   const style = document.createElement('style');
   style.textContent = `
@@ -26,103 +26,134 @@ if (Platform.OS === 'web') {
   document.head.appendChild(style);
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 type InitState =
   | { status: 'loading' }
   | { status: 'error'; message: string; retryable: boolean }
   | { status: 'ready' };
 
-// ── App ────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [initState, setInitState] = useState<InitState>({ status: 'loading' });
 
-  /**
-   * Check whether the authenticated user has a complete profile row.
-   *
-   * Outcomes:
-   *  PGRST116  → definitively no profile → go to ProfileSetup
-   *  data ok   → profile exists           → go to App
-   *  timeout   → network is slow          → show retry (do NOT redirect to ProfileSetup)
-   *  other err → DB/infra error           → show retry
-   */
-  const checkProfile = useCallback(async (uid: string) => {
-    setInitState({ status: 'loading' });
+  const checkProfile = useCallback(async (uid: string, isInitial = true) => {
+    if (isInitial) setInitState({ status: 'loading' });
 
-    // Per-query timeout via AbortController
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      const { data: profile, error } = await supabase
+      const fetchPromise = supabase
         .from('users')
         .select('id, username, name')
         .eq('id', uid)
-        .single()
-        .abortSignal(controller.signal);
+        .single();
 
-      clearTimeout(timer);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('TIMEOUT')), 7000);
+      });
+
+      const { data: profile, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // Row genuinely does not exist → send to ProfileSetup
           setHasProfile(false);
-          setInitState({ status: 'ready' });
+          if (isInitial) setInitState({ status: 'ready' });
         } else if (error.message?.toLowerCase().includes('abort')) {
-          setInitState({ status: 'error', message: 'Connection timed out. Check your internet and retry.', retryable: true });
+          if (isInitial) setInitState({
+            status: 'error',
+            message: 'Connection timed out. Check your internet and retry.',
+            retryable: true,
+          });
         } else {
-          setInitState({ status: 'error', message: `DB error: ${error.message}`, retryable: true });
+          if (isInitial) setInitState({ status: 'error', message: `DB error: ${error.message}`, retryable: true });
         }
         return;
       }
 
-      if (!profile || !profile.username || !profile.name) {
-        // Row exists but incomplete → send to ProfileSetup
-        setHasProfile(false);
-      } else {
-        setHasProfile(true);
-      }
-      setInitState({ status: 'ready' });
+      setHasProfile(Boolean(profile?.username && profile?.name));
+      if (isInitial) setInitState({ status: 'ready' });
+    } catch (e: unknown) {
+      const error = e instanceof Error ? e : new Error('Unknown startup error');
+      const isTimeout =
+        error.message === 'TIMEOUT' ||
+        error.name === 'AbortError' ||
+        error.message.toLowerCase().includes('abort');
 
-    } catch (e: any) {
-      clearTimeout(timer);
-      const isTimeout = e.name === 'AbortError' || e.message?.toLowerCase().includes('abort');
-      setInitState({
+      if (isInitial) setInitState({
         status: 'error',
         message: isTimeout
           ? 'Connection timed out. Check your internet and retry.'
-          : `Startup error: ${e.message}`,
+          : `Startup error: ${error.message}`,
         retryable: true,
       });
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }, []);
 
-  // Refresh called from child screens (e.g. after ProfileSetup saves)
   const refreshProfile = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) await checkProfile(session.user.id);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.user) await checkProfile(session.user.id, false);
   }, [checkProfile]);
 
   useEffect(() => {
-    // onAuthStateChange fires immediately with INITIAL_SESSION on mount.
-    // We rely solely on this — no separate getSession() needed.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    let mounted = true;
+    let initialCheckDone = false;
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        if (!mounted) return;
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          await checkProfile(currentUser.id, true);
+        } else {
+          setHasProfile(false);
+          setInitState({ status: 'ready' });
+        }
+        initialCheckDone = true;
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setHasProfile(false);
+        setInitState({ status: 'ready' });
+        initialCheckDone = true;
+      });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      if (event === 'INITIAL_SESSION') return;
+      if (event === 'TOKEN_REFRESHED') return;
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
+
       if (currentUser) {
-        await checkProfile(currentUser.id);
+        if (!initialCheckDone) {
+          await checkProfile(currentUser.id, true);
+        } else {
+          // Silent refresh
+          await checkProfile(currentUser.id, false);
+        }
       } else {
-        // Logged out → go to auth screens
         setHasProfile(false);
         setInitState({ status: 'ready' });
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [checkProfile]);
 
-  // ── Splash / Loading ───────────────────────────────────────────────────────
   if (initState.status === 'loading') {
     return (
       <View style={styles.center}>
@@ -133,7 +164,6 @@ export default function App() {
     );
   }
 
-  // ── Error / Retry ──────────────────────────────────────────────────────────
   if (initState.status === 'error') {
     return (
       <View style={styles.center}>
@@ -144,14 +174,19 @@ export default function App() {
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={() => {
-              if (user) checkProfile(user.id);
-              else {
-                setInitState({ status: 'loading' });
-                supabase.auth.getSession().then(({ data: { session } }) => {
+              if (user) {
+                checkProfile(user.id);
+                return;
+              }
+
+              setInitState({ status: 'loading' });
+              supabase.auth
+                .getSession()
+                .then(({ data: { session } }) => {
                   if (session?.user) checkProfile(session.user.id);
                   else setInitState({ status: 'ready' });
-                });
-              }
+                })
+                .catch(() => setInitState({ status: 'ready' }));
             }}
           >
             <Text style={styles.retryText}>Retry</Text>
@@ -161,15 +196,12 @@ export default function App() {
     );
   }
 
-  // ── App ────────────────────────────────────────────────────────────────────
-  const linking: any = {
-    prefixes: [
-      Platform.OS === 'web' ? window.location.origin : 'gullycric://',
-      'gullycric://',
-    ],
+  const linking: LinkingOptions<RootStackParamList> = {
+    prefixes: [Platform.OS === 'web' ? window.location.origin : 'gullycric://', 'gullycric://'],
     config: {
       screens: {
         PublicMatch: 'match/:matchId',
+        PublicUserProfile: 'user/:username',
         App: {
           path: '',
           screens: {
